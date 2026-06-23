@@ -21,14 +21,16 @@
         import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
         // คีย์เชื่อมต่อฐานข้อมูล Google Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyCKdLVy7fcWRcAW72zrtR6H1oIrJoPFsQQ",
-            authDomain: "breathsafe-project-d3556.firebaseapp.com",
-            projectId: "breathsafe-project-d3556",
-            storageBucket: "breathsafe-project-d3556.firebasestorage.app",
-            messagingSenderId: "104485361484",
-            appId: "1:104485361484:web:c3a931f5f6e0a0499861e9"
-        };
+       // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCKdLVy7fcWRcAW72zrtR6H1oIrJoPFsQQ",
+  authDomain: "airwise-project-d3556.firebaseapp.com",
+  projectId: "airwise-project-d3556",
+  storageBucket: "airwise-project-d3556.firebasestorage.app",
+  messagingSenderId: "104485361484",
+  appId: "1:104485361484:web:d0e490eed63a11e99861e9",
+  measurementId: "G-HTER90T3GJ"
+};
 
         let app, auth, db, storage, googleProvider;
         if(firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY_HERE") {
@@ -713,93 +715,260 @@
             </div>
     </main>
 
-    <main id="view-join" class="view-section max-w-md w-full mx-auto p-6 md:p-8 my-8 bg-white rounded-[2.5rem] shadow-xl border border-slate-200/80 relative overflow-hidden">
-        <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-        
-        <div id="box-user-authentication" class="space-y-5 pt-3">
-            <div class="text-center pb-4 border-b border-slate-100">
-                <div class="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl mx-auto flex items-center justify-center text-xl mb-3 shadow-inner"><i class="fas fa-fingerprint"></i></div>
-                <h2 class="text-xl font-black text-slate-900 tracking-tight lang-auth-title">ยืนยันตัวตนเข้าใช้งาน</h2>
-                <p class="text-[11px] text-slate-400 mt-1 font-semibold lang-auth-subtitle">ระบบสมาชิกเพื่อบันทึกและติดตามสถิติการรับมลพิษรายวัน</p>
-            </div>
-            
-            <div class="space-y-1.5">
-                <label class="text-xs font-bold text-slate-600 lang-auth-email">บัญชีอีเมลผู้ใช้งาน (Email)</label>
-                <div class="relative">
-                    <i class="fas fa-at absolute left-4 top-3.5 text-slate-400 text-xs"></i>
-                    <input id="input-auth-email" type="email" placeholder="username@email.com" class="w-full border border-slate-200 pl-10 p-3 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50 focus:bg-white transition">
-                </div>
-            </div>
-            
-            <div class="space-y-1.5">
-                <label class="text-xs font-bold text-slate-600 lang-auth-pass">รหัสผ่านความปลอดภัย (Password)</label>
-                <div class="relative">
-                    <i class="fas fa-shield-keyhole absolute left-4 top-3.5 text-slate-400 text-xs"></i>
-                    <input id="input-auth-password" type="password" placeholder="••••••••" class="w-full border border-slate-200 pl-10 p-3 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50 focus:bg-white transition">
-                    <button type="button" onclick="toggleInputPasswordVisibility('input-auth-password')" class="absolute right-4 top-3.5 text-slate-400 hover:text-blue-600 transition"><i class="fas fa-eye"></i></button>
-                </div>
-            </div>
+    <main id="view-join" class="view-section max-w-md w-full mx-auto px-4 py-8 md:py-12">
 
-            <div class="pt-2 space-y-2.5">
-                <button onclick="executeFirebaseEmailAuth('login')" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition flex justify-center items-center"><i class="fas fa-right-to-bracket mr-2"></i><span class="lang-auth-btn-in">ลงชื่อเข้าใช้ระบบ</span></button>
-                <button onclick="executeFirebaseEmailAuth('register')" class="w-full bg-white text-slate-700 font-bold py-3 rounded-xl text-xs border border-slate-200 hover:bg-slate-50 transition uppercase tracking-wider lang-auth-btn-up">สมัครเปิดบัญชีใหม่</button>
-            </div>
-            
-            <div class="relative py-2 flex items-center justify-center">
-                <div class="border-t border-slate-200 w-full absolute"></div>
-                <div class="bg-white px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest relative z-10 lang-auth-or">หรือล็อกอินผ่านช่องทาง</div>
-            </div>
-            
-            <button onclick="executeFirebaseGoogleAuth()" class="w-full bg-white border border-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs shadow-sm hover:bg-slate-50 transition flex items-center justify-center"><img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-4 h-4 mr-2" alt="Google Logo"> <span class="lang-auth-google">เข้าสู่ระบบด้วยบัญชี Google</span></button>
-            
-            <div class="text-center mt-4 pt-3 border-t border-slate-100">
-                <button onclick="switchAuthBoxMode('admin')" class="text-[10px] font-black text-slate-400 hover:text-rose-600 transition underline tracking-wider uppercase"><i class="fas fa-lock-keyhole text-[9px] mr-1"></i>สำหรับผู้ดูแลระบบโครงงาน (Admin Only)</button>
+        <!-- ===== LOGIN BOX ===== -->
+        <div id="box-user-authentication" class="bg-white rounded-[2.5rem] shadow-xl border border-slate-200/80 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+            <div class="p-7 md:p-9 space-y-5">
+                <!-- Header -->
+                <div class="text-center pb-4 border-b border-slate-100">
+                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-blue-200">
+                        <i class="fas fa-fingerprint"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-slate-900 tracking-tight lang-auth-title">เข้าสู่ระบบ BREATHSAFE</h2>
+                    <p class="text-[11px] text-slate-400 mt-1 font-semibold lang-auth-subtitle">ติดตามสถิติคุณภาพอากาศรายวันของคุณ</p>
+                </div>
+
+                <!-- Email -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">อีเมล (Email)</label>
+                    <div class="relative">
+                        <i class="fas fa-at absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-auth-email" type="email" placeholder="username@email.com"
+                            class="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 bg-slate-50 focus:bg-white transition">
+                    </div>
+                </div>
+
+                <!-- Password -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-600">รหัสผ่าน (Password)</label>
+                    </div>
+                    <div class="relative">
+                        <i class="fas fa-shield-keyhole absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-auth-password" type="password" placeholder="••••••••"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 bg-slate-50 focus:bg-white transition">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-auth-password')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Login button -->
+                <div class="pt-1 space-y-3">
+                    <button onclick="executeFirebaseEmailAuth('login')"
+                        class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md shadow-blue-200 hover:shadow-lg transition active:scale-[0.98] flex justify-center items-center gap-2">
+                        <i class="fas fa-right-to-bracket"></i>
+                        <span class="lang-auth-btn-in">เข้าสู่ระบบ</span>
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="relative flex items-center py-1">
+                        <div class="flex-grow border-t border-slate-200"></div>
+                        <span class="mx-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">หรือ</span>
+                        <div class="flex-grow border-t border-slate-200"></div>
+                    </div>
+
+                    <!-- Google Sign-In -->
+                    <button onclick="executeFirebaseGoogleAuth()"
+                        class="w-full bg-white border border-slate-200 text-slate-700 font-bold py-3.5 rounded-xl text-sm shadow-sm hover:bg-slate-50 hover:border-slate-300 transition active:scale-[0.98] flex items-center justify-center gap-3">
+                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.92l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+                        <span class="lang-auth-google">เข้าสู่ระบบด้วย Google</span>
+                    </button>
+                </div>
+
+                <!-- Register link -->
+                <div class="text-center pt-2 border-t border-slate-100">
+                    <p class="text-xs text-slate-500">ยังไม่มีบัญชี?
+                        <button onclick="switchAuthBoxMode('register')" class="text-blue-600 font-bold hover:underline">สมัครสมาชิกฟรี</button>
+                    </p>
+                </div>
+
+                <!-- Admin link -->
+                <div class="text-center">
+                    <button onclick="switchAuthBoxMode('admin')" class="text-[10px] font-black text-slate-300 hover:text-rose-500 transition uppercase tracking-wider">
+                        <i class="fas fa-lock-keyhole text-[9px] mr-1"></i>Admin Access
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div id="box-admin-authentication" class="hidden space-y-5 pt-3">
-            <div class="text-center pb-4 border-b border-rose-100">
-                <div class="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl mx-auto flex items-center justify-center text-xl mb-3 shadow-inner"><i class="fas fa-user-gear"></i></div>
-                <h2 class="text-xl font-black text-rose-800 tracking-tight">ระบบสิทธิ์ผู้ดูแลกลาง</h2>
-                <p class="text-[11px] text-rose-400 mt-1 font-bold">สงวนสิทธิ์เฉพาะผู้พัฒนาและแอดมินโรงเรียนเท่านั้น</p>
-            </div>
-            
-            <div class="space-y-1.5">
-                <label class="text-xs font-bold text-slate-600">รหัสบัญชีแอดมิน (Admin ID)</label>
-                <div class="relative">
-                    <i class="fas fa-id-card-clip absolute left-4 top-3.5 text-slate-400 text-xs"></i>
-                    <input id="input-admin-username" type="text" placeholder="ระบุแอดมินไอดี" class="w-full border border-slate-200 pl-10 p-3 rounded-xl text-xs font-medium focus:ring-2 focus:ring-rose-500 bg-slate-50/50">
+        <!-- ===== REGISTER BOX ===== -->
+        <div id="box-register-authentication" class="hidden bg-white rounded-[2.5rem] shadow-xl border border-slate-200/80 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-500"></div>
+            <div class="p-7 md:p-9 space-y-5">
+                <!-- Header -->
+                <div class="text-center pb-4 border-b border-slate-100">
+                    <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-emerald-200">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-slate-900 tracking-tight">สมัครสมาชิกใหม่</h2>
+                    <p class="text-[11px] text-slate-400 mt-1 font-semibold">สร้างบัญชี BREATHSAFE ฟรี ไม่มีค่าใช้จ่าย</p>
                 </div>
-            </div>
-            
-            <div class="space-y-1.5">
-                <label class="text-xs font-bold text-slate-600">รหัสผ่านความปลอดภัย (Password)</label>
-                <div class="relative">
-                    <i class="fas fa-key-skeleton absolute left-4 top-3.5 text-slate-400 text-xs"></i>
-                    <input id="input-admin-password" type="password" placeholder="••••••••" class="w-full border border-slate-200 pl-10 p-3 rounded-xl text-xs font-medium focus:ring-2 focus:ring-rose-500 bg-slate-50/50">
-                    <button type="button" onclick="toggleInputPasswordVisibility('input-admin-password')" class="absolute right-4 top-3.5 text-slate-400 hover:text-rose-600 transition"><i class="fas fa-eye"></i></button>
+
+                <!-- Email -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">อีเมล <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <i class="fas fa-at absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-reg-email" type="email" placeholder="username@email.com"
+                            class="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 focus:bg-white transition"
+                            oninput="validateRegisterForm()">
+                    </div>
                 </div>
-            </div>
-            
-            <div class="pt-2 space-y-2">
-                <button onclick="executeSystemAdminLogin()" class="w-full bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition"><i class="fas fa-unlock-keyhole mr-1.5"></i>ยืนยันสิทธิ์แอดมิน</button>
-                <button onclick="switchAuthBoxMode('user')" class="w-full text-[10px] font-bold text-slate-400 hover:text-slate-700 text-center block pt-2 underline uppercase tracking-wider lang-admin-back">กลับหน้าต่างผู้ใช้งานทั่วไป</button>
+
+                <!-- Password -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">รหัสผ่าน <span class="text-rose-500">*</span> <span class="text-slate-400 font-normal">(อย่างน้อย 6 ตัวอักษร)</span></label>
+                    <div class="relative">
+                        <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-reg-password" type="password" placeholder="สร้างรหัสผ่าน"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 focus:bg-white transition"
+                            oninput="validateRegisterForm()">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-reg-password')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                    </div>
+                    <!-- Password strength bar -->
+                    <div class="flex gap-1 mt-1">
+                        <div id="pw-bar-1" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                        <div id="pw-bar-2" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                        <div id="pw-bar-3" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                        <div id="pw-bar-4" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                    </div>
+                    <p id="pw-strength-label" class="text-[10px] font-bold text-slate-400"></p>
+                </div>
+
+                <!-- Confirm Password -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">ยืนยันรหัสผ่าน <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <i class="fas fa-shield-check absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-reg-confirm" type="password" placeholder="พิมพ์รหัสผ่านอีกครั้ง"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 focus:bg-white transition"
+                            oninput="validateRegisterForm()">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-reg-confirm')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                        <!-- match indicator -->
+                        <div id="confirm-match-icon" class="absolute right-11 top-1/2 -translate-y-1/2 hidden">
+                            <i class="fas fa-circle-check text-emerald-500 text-sm"></i>
+                        </div>
+                        <div id="confirm-nomatch-icon" class="absolute right-11 top-1/2 -translate-y-1/2 hidden">
+                            <i class="fas fa-circle-xmark text-rose-500 text-sm"></i>
+                        </div>
+                    </div>
+                    <p id="confirm-match-msg" class="text-[10px] font-bold text-slate-400"></p>
+                </div>
+
+                <!-- Register button -->
+                <div class="pt-1 space-y-3">
+                    <button id="btn-register" onclick="executeFirebaseRegister()"
+                        class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md shadow-emerald-200 hover:shadow-lg transition active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                        <i class="fas fa-user-plus"></i>
+                        สร้างบัญชีใหม่
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="relative flex items-center py-1">
+                        <div class="flex-grow border-t border-slate-200"></div>
+                        <span class="mx-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">หรือ</span>
+                        <div class="flex-grow border-t border-slate-200"></div>
+                    </div>
+
+                    <!-- Google Sign-In (สมัครผ่าน Google ทันที) -->
+                    <button onclick="executeFirebaseGoogleAuth()"
+                        class="w-full bg-white border border-slate-200 text-slate-700 font-bold py-3.5 rounded-xl text-sm shadow-sm hover:bg-slate-50 hover:border-slate-300 transition active:scale-[0.98] flex items-center justify-center gap-3">
+                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.92l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+                        สมัครด้วยบัญชี Google
+                    </button>
+                </div>
+
+                <!-- Back to login -->
+                <div class="text-center pt-2 border-t border-slate-100">
+                    <p class="text-xs text-slate-500">มีบัญชีอยู่แล้ว?
+                        <button onclick="switchAuthBoxMode('user')" class="text-blue-600 font-bold hover:underline">เข้าสู่ระบบ</button>
+                    </p>
+                </div>
             </div>
         </div>
 
-        <div id="box-profile-authenticated" class="hidden text-center space-y-5 py-6">
-            <div class="w-24 h-24 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-3xl shadow-lg border-4 border-white relative">
-                <i class="fas fa-user-shield"></i>
-                <div id="badge-admin-profile-star" class="hidden absolute bottom-0 right-0 bg-rose-500 text-white w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] shadow"><i class="fas fa-star"></i></div>
-            </div>
-            <div>
-                <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 bg-slate-100 inline-block px-3 py-1 rounded-full lang-profile-greet">เชื่อมต่อระบบคลาวด์สำเร็จ</div>
-                <h3 id="authenticated-user-name" class="font-extrabold text-base text-slate-900 break-words max-w-xs mx-auto">--</h3>
-            </div>
-            <div class="pt-4 border-t border-slate-100">
-                <button onclick="executeSignOutAction()" class="bg-white text-rose-600 border border-rose-200 px-6 py-3 rounded-xl text-xs font-bold shadow-sm hover:bg-rose-50 transition w-full uppercase tracking-wider"><i class="fas fa-power-off mr-2"></i><span class="lang-profile-out">ลงชื่อออกจากระบบ</span></button>
+        <!-- ===== ADMIN BOX ===== -->
+        <div id="box-admin-authentication" class="hidden bg-white rounded-[2.5rem] shadow-xl border border-rose-100 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-500 to-red-600"></div>
+            <div class="p-7 md:p-9 space-y-5">
+                <div class="text-center pb-4 border-b border-rose-100">
+                    <div class="w-16 h-16 bg-gradient-to-br from-rose-500 to-red-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-rose-200">
+                        <i class="fas fa-user-gear"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-rose-800 tracking-tight">ระบบผู้ดูแลระบบ</h2>
+                    <p class="text-[11px] text-rose-400 mt-1 font-bold">สงวนสิทธิ์เฉพาะผู้พัฒนาและแอดมินโรงเรียนเท่านั้น</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">Admin ID</label>
+                    <div class="relative">
+                        <i class="fas fa-id-card-clip absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-admin-username" type="text" placeholder="ระบุแอดมินไอดี"
+                            class="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-400 bg-slate-50">
+                    </div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">Password</label>
+                    <div class="relative">
+                        <i class="fas fa-key-skeleton absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-admin-password" type="password" placeholder="••••••••"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-400 bg-slate-50">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-admin-password')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pt-1 space-y-2">
+                    <button onclick="executeSystemAdminLogin()"
+                        class="w-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider shadow-md hover:shadow-lg transition active:scale-[0.98]">
+                        <i class="fas fa-unlock-keyhole mr-1.5"></i>ยืนยันสิทธิ์แอดมิน
+                    </button>
+                    <button onclick="switchAuthBoxMode('user')"
+                        class="w-full text-[11px] font-bold text-slate-400 hover:text-slate-700 text-center block pt-1 underline uppercase tracking-wider lang-admin-back">
+                        ← กลับหน้าผู้ใช้งานทั่วไป
+                    </button>
+                </div>
             </div>
         </div>
+
+        <!-- ===== PROFILE (logged in) ===== -->
+        <div id="box-profile-authenticated" class="hidden bg-white rounded-[2.5rem] shadow-xl border border-slate-200/80 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+            <div class="p-7 md:p-9 text-center space-y-5 py-8">
+                <div class="relative w-24 h-24 mx-auto">
+                    <div class="w-24 h-24 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-full flex items-center justify-center text-3xl shadow-lg border-4 border-white">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div id="badge-admin-profile-star" class="hidden absolute bottom-0 right-0 bg-rose-500 text-white w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] shadow">
+                        <i class="fas fa-star"></i>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 bg-slate-100 inline-block px-3 py-1 rounded-full lang-profile-greet">เชื่อมต่อระบบสำเร็จ</div>
+                    <h3 id="authenticated-user-name" class="font-extrabold text-base text-slate-900 break-words max-w-xs mx-auto mt-2">--</h3>
+                </div>
+                <div class="pt-4 border-t border-slate-100">
+                    <button onclick="executeSignOutAction()" class="bg-white text-rose-600 border border-rose-200 px-6 py-3 rounded-xl text-xs font-bold shadow-sm hover:bg-rose-50 transition w-full uppercase tracking-wider">
+                        <i class="fas fa-power-off mr-2"></i><span class="lang-profile-out">ออกจากระบบ</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <div id="modal-admin-hero" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] justify-center items-center p-4">
@@ -2219,10 +2388,88 @@ const districtIssuesData = {
         // [10] ระบบยืนยันตัวตนและความปลอดภัย (Authentication Engine)
         // -------------------------------------------------------------
         window.switchAuthBoxMode = (mode) => {
-            document.getElementById('box-user-authentication').classList.add('hidden');
-            document.getElementById('box-admin-authentication').classList.add('hidden');
-            if(mode === 'admin') document.getElementById('box-admin-authentication').classList.remove('hidden');
-            else document.getElementById('box-user-authentication').classList.remove('hidden');
+            ['box-user-authentication','box-register-authentication','box-admin-authentication','box-profile-authenticated']
+                .forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
+            const show = {
+                user:     'box-user-authentication',
+                register: 'box-register-authentication',
+                admin:    'box-admin-authentication',
+                profile:  'box-profile-authenticated'
+            }[mode];
+            if (show) document.getElementById(show)?.classList.remove('hidden');
+        };
+
+        // ===== Password strength + confirm match validator =====
+        window.validateRegisterForm = () => {
+            const email    = document.getElementById('input-reg-email')?.value.trim() || '';
+            const pw       = document.getElementById('input-reg-password')?.value || '';
+            const confirm  = document.getElementById('input-reg-confirm')?.value || '';
+            const btnReg   = document.getElementById('btn-register');
+            const bars     = [1,2,3,4].map(i => document.getElementById(`pw-bar-${i}`));
+            const label    = document.getElementById('pw-strength-label');
+            const matchOk  = document.getElementById('confirm-match-icon');
+            const matchNo  = document.getElementById('confirm-nomatch-icon');
+            const matchMsg = document.getElementById('confirm-match-msg');
+
+            // --- strength score ---
+            let score = 0;
+            if (pw.length >= 6)  score++;
+            if (pw.length >= 10) score++;
+            if (/[A-Z]/.test(pw) || /[0-9]/.test(pw)) score++;
+            if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+            const colors  = ['bg-rose-400','bg-amber-400','bg-yellow-400','bg-emerald-500'];
+            const labels  = ['อ่อนมาก','พอใช้','ดี','แข็งแกร่ง'];
+            const txtCols = ['text-rose-500','text-amber-500','text-yellow-600','text-emerald-600'];
+            bars.forEach((b, i) => {
+                b.className = `h-1 flex-1 rounded-full transition-all duration-300 ${i < score ? colors[score-1] : 'bg-slate-200'}`;
+            });
+            if (label) {
+                label.textContent = pw.length > 0 ? `ความแข็งแกร่ง: ${labels[score-1] || labels[0]}` : '';
+                label.className   = `text-[10px] font-bold ${score > 0 ? txtCols[score-1] : 'text-slate-400'}`;
+            }
+
+            // --- confirm match ---
+            const pwMatch = confirm.length > 0 && pw === confirm;
+            const pwNoMatch = confirm.length > 0 && pw !== confirm;
+            matchOk?.classList[pwMatch   ? 'remove' : 'add']('hidden');
+            matchNo?.classList[pwNoMatch ? 'remove' : 'add']('hidden');
+            if (matchMsg) {
+                if (pwMatch)   { matchMsg.textContent = '✓ รหัสผ่านตรงกัน'; matchMsg.className = 'text-[10px] font-bold text-emerald-600'; }
+                else if (pwNoMatch) { matchMsg.textContent = '✗ รหัสผ่านไม่ตรงกัน'; matchMsg.className = 'text-[10px] font-bold text-rose-500'; }
+                else { matchMsg.textContent = ''; }
+            }
+
+            // --- enable register button only when all valid ---
+            const canRegister = email.includes('@') && pw.length >= 6 && pw === confirm;
+            if (btnReg) { btnReg.disabled = !canRegister; }
+        };
+
+        // ===== Firebase Register =====
+        window.executeFirebaseRegister = async () => {
+            const email   = document.getElementById('input-reg-email')?.value.trim();
+            const pw      = document.getElementById('input-reg-password')?.value;
+            const confirm = document.getElementById('input-reg-confirm')?.value;
+
+            if (!email || !pw || pw !== confirm) return;
+
+            Swal.fire({ title: 'กำลังสร้างบัญชี...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                if (window.fbAuth && window.fbModules) {
+                    const cred = await window.fbModules.createUserWithEmailAndPassword(window.fbAuth, email, pw);
+                    Swal.fire({ icon: 'success', title: 'สมัครสมาชิกสำเร็จ! 🎉', html: `<p class="text-sm text-slate-600">ยินดีต้อนรับสู่ระบบ BREATHSAFE<br><b>${email}</b></p>`, timer: 2500, showConfirmButton: false });
+                    setLoginState(false, cred.user);
+                } else {
+                    Swal.fire({ icon: 'info', title: 'โหมดออฟไลน์', text: 'ยังไม่ได้ตั้งค่า Firebase กรุณาเปิดใช้งาน Firebase ก่อน', confirmButtonColor: '#3b82f6' });
+                }
+            } catch (err) {
+                let msg = err.message;
+                if (err.code === 'auth/email-already-in-use') msg = 'อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบแทน';
+                if (err.code === 'auth/invalid-email')        msg = 'รูปแบบอีเมลไม่ถูกต้อง';
+                if (err.code === 'auth/weak-password')        msg = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+                Swal.fire({ icon: 'error', title: 'สมัครไม่สำเร็จ', text: msg, confirmButtonColor: '#ef4444' });
+            }
         };
 
         window.toggleInputPasswordVisibility = (inputId) => {
@@ -2307,42 +2554,32 @@ const districtIssuesData = {
         // ฟังก์ชันควบคุม UI เมื่อสถานะ Login เปลี่ยนแปลง
         function setLoginState(isAdmin, userObject) {
             isUserAdmin = isAdmin;
-            
+
             if (userObject) {
-                document.getElementById('box-user-authentication').classList.add('hidden');
-                document.getElementById('box-admin-authentication').classList.add('hidden');
-                document.getElementById('box-profile-authenticated').classList.remove('hidden');
-                document.getElementById('authenticated-user-name').innerText = userObject.displayName || userObject.email || "Breathsafe User";
-                
-                if (isAdmin) {
-                    document.getElementById('admin-badge').classList.remove('hidden');
-                    document.getElementById('admin-badge').classList.add('inline-flex');
-                    document.getElementById('badge-admin-profile-star').classList.remove('hidden');
-                    document.getElementById('badge-admin-profile-star').classList.add('flex');
-                    document.getElementById('btn-edit-hero').classList.remove('hidden');
-                    document.getElementById('btn-add-news').classList.remove('hidden');
-                    document.getElementById('btn-add-member-card').classList.remove('hidden');
-                } else {
-                    document.getElementById('admin-badge').classList.add('hidden');
-                    document.getElementById('admin-badge').classList.remove('inline-flex');
-                    document.getElementById('badge-admin-profile-star').classList.add('hidden');
-                    document.getElementById('badge-admin-profile-star').classList.remove('flex');
-                    document.getElementById('btn-edit-hero').classList.add('hidden');
-                    document.getElementById('btn-add-news').classList.add('hidden');
-                    document.getElementById('btn-add-member-card').classList.add('hidden');
-                }
+                // ซ่อนทุก box แล้วแสดง profile
+                switchAuthBoxMode('profile');
+                document.getElementById('authenticated-user-name').innerText =
+                    userObject.displayName || userObject.email || "Breathsafe User";
+
+                const adminBadge = document.getElementById('admin-badge');
+                const starBadge  = document.getElementById('badge-admin-profile-star');
+                [adminBadge, starBadge].forEach(el => el?.classList[isAdmin ? 'remove' : 'add']('hidden'));
+                if (adminBadge) adminBadge.classList[isAdmin ? 'add' : 'remove']('inline-flex');
+                if (starBadge)  starBadge.classList[isAdmin ? 'add' : 'remove']('flex');
+
+                ['btn-edit-hero','btn-add-news','btn-add-member-card'].forEach(id => {
+                    document.getElementById(id)?.classList[isAdmin ? 'remove' : 'add']('hidden');
+                });
             } else {
-                document.getElementById('box-profile-authenticated').classList.add('hidden');
-                document.getElementById('box-user-authentication').classList.remove('hidden');
-                document.getElementById('input-auth-email').value = '';
-                document.getElementById('input-auth-password').value = '';
-                document.getElementById('admin-badge').classList.add('hidden');
-                document.getElementById('btn-edit-hero').classList.add('hidden');
-                document.getElementById('btn-add-news').classList.add('hidden');
-                document.getElementById('btn-add-member-card').classList.add('hidden');
+                switchAuthBoxMode('user');
+                // clear ฟอร์ม login
+                ['input-auth-email','input-auth-password','input-reg-email','input-reg-password','input-reg-confirm']
+                    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+                document.getElementById('admin-badge')?.classList.add('hidden');
+                ['btn-edit-hero','btn-add-news','btn-add-member-card'].forEach(id =>
+                    document.getElementById(id)?.classList.add('hidden'));
             }
-            
-            // สั่งเรนเดอร์การ์ดใหม่เพื่อให้ปุ่มแก้ไข/ลบ ปรากฏตามสิทธิ์แอดมิน
+
             renderNewsCards();
             renderAboutCards();
         }
