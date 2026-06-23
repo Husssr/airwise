@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -90,10 +92,50 @@
 /* ปรับปรุงปุ่มควบคุม Zoom ให้ดูคลีนขึ้น */
 .leaflet-control-zoom-in, .leaflet-control-zoom-out {
     border-radius: 10px !important;
-    border: 1px solid #e2e8f0 !important; /* slate-200 */
+    border: 1px solid #e2e8f0 !important;
     box-shadow: none !important;
     margin-bottom: 3px;
 }
+/* ====== Crop Modal Styles ====== */
+#crop-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.75);
+    backdrop-filter: blur(6px);
+    z-index: 99999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+}
+#crop-modal-box {
+    background: #fff;
+    border-radius: 28px;
+    width: 100%; max-width: 520px;
+    box-shadow: 0 32px 64px -12px rgba(0,0,0,0.4);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    max-height: 92vh;
+}
+#crop-image-area {
+    position: relative;
+    background: #0f172a;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+#crop-image-area img {
+    display: block;
+    max-width: 100%;
+    max-height: 360px;
+    width: 100%;
+    object-fit: contain;
+}
+/* Cropper circle overlay สำหรับโหมด about */
+.crop-mode-circle .cropper-view-box,
+.crop-mode-circle .cropper-face {
+    border-radius: 50%;
+}
+.cropper-view-box { outline-color: #3b82f6; }
+.cropper-point { background: #3b82f6; }
+.cropper-line { background: #3b82f6; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -115,11 +157,11 @@
             </div>
 
             <div class="hidden lg:flex items-center space-x-1">
-                <button onclick="switchView('home')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors lang-nav-home">หน้าแรก</button>
-                <button onclick="switchView('air')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors lang-nav-air">ข้อมูลคุณภาพอากาศ</button>
-                <button onclick="switchView('map')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors lang-nav-map">แผนที่มลพิษ</button>
-                <button onclick="switchView('about')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors lang-nav-about">คณะผู้จัดทำ</button>
-                <button onclick="switchView('join')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors lang-nav-join">เข้าสู่ระบบ</button>
+                <button id="nav-home" onclick="switchView('home')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-home">หน้าแรก</button>
+                <button id="nav-air" onclick="switchView('air')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-air">ข้อมูลคุณภาพอากาศ</button>
+                <button id="nav-map" onclick="switchView('map')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-map">แผนที่มลพิษ</button>
+                <button id="nav-about" onclick="switchView('about')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-about">คณะผู้จัดทำ</button>
+                <button id="nav-join" onclick="switchView('join')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-join">เข้าสู่ระบบ</button>
             </div>
 
             <div class="flex items-center space-x-2 md:space-x-3">
@@ -141,12 +183,26 @@
         </div>
     </div>
 
-    <div id="mobile-menu-dropdown" class="hidden lg:hidden bg-white border-t border-slate-100 shadow-xl absolute w-full left-0 top-[80px] p-4 space-y-2 z-[999]">
-        <button onclick="switchView('home'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-lg font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 lang-nav-home"><i class="fas fa-home text-blue-500 mr-2 w-5"></i> หน้าแรก</button>
-        <button onclick="switchView('air'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-lg font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 lang-nav-air"><i class="fas fa-chart-pie text-blue-500 mr-2 w-5"></i> ข้อมูลคุณภาพอากาศ</button>
-        <button onclick="switchView('map'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-lg font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 lang-nav-map"><i class="fas fa-map-marked-alt text-blue-500 mr-2 w-5"></i> แผนที่มลพิษ</button>
-        <button onclick="switchView('about'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-lg font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 lang-nav-about"><i class="fas fa-users text-blue-500 mr-2 w-5"></i> คณะผู้จัดทำ</button>
-        <button onclick="switchView('join'); toggleMobileMenu();" class="w-full text-left px-4 py-3 rounded-lg font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 lang-nav-join"><i class="fas fa-sign-in-alt text-blue-500 mr-2 w-5"></i> เข้าสู่ระบบ</button>
+    <!-- Backdrop สำหรับเมนูมือถือ -->
+    <div id="mobile-menu-backdrop" onclick="toggleMobileMenu()" class="hidden lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[1000] transition-opacity duration-300 opacity-0"></div>
+
+    <!-- เมนูมือถือแบบ Bottom Sheet -->
+    <div id="mobile-menu-dropdown" class="hidden lg:hidden fixed bottom-0 left-0 w-full bg-white rounded-t-[2rem] shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.25)] z-[1001] p-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-1.5 transform translate-y-full transition-transform duration-300 ease-out max-h-[80vh] overflow-y-auto custom-scrollbar">
+        <div class="w-10 h-1.5 bg-slate-200 rounded-full mx-auto mb-2"></div>
+        <div class="flex items-center justify-between px-2 pb-2 mb-1 border-b border-slate-100">
+            <div class="flex items-center space-x-2">
+                <div class="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-200">
+                    <i class="fas fa-wind text-white text-sm"></i>
+                </div>
+                <span class="font-extrabold text-slate-800 text-sm tracking-tight">AIRWISE</span>
+            </div>
+            <button onclick="toggleMobileMenu()" class="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"><i class="fas fa-xmark"></i></button>
+        </div>
+        <button onclick="switchView('home'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-home"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-house"></i></span> หน้าแรก</button>
+        <button onclick="switchView('air'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-air"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-chart-pie"></i></span> ข้อมูลคุณภาพอากาศ</button>
+        <button onclick="switchView('map'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-map"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-map-location-dot"></i></span> แผนที่มลพิษ</button>
+        <button onclick="switchView('about'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-about"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-users"></i></span> คณะผู้จัดทำ</button>
+        <button onclick="switchView('join'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-join"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-right-to-bracket"></i></span> เข้าสู่ระบบ</button>
     </div>
 </header>
 
@@ -211,14 +267,14 @@
                         </div>
                 </div>
                 <div class="bg-slate-900 text-white p-3.5 rounded-2xl mt-4 flex items-center justify-between overflow-hidden relative">
-                    <i class="fas fa-cloud-sun-rain absolute -right-2 -bottom-2 text-5xl text-slate-800 opacity-40"></i>
+                    <i id="real-weather-icon" class="fas fa-cloud-sun-rain absolute -right-2 -bottom-2 text-5xl text-slate-800 opacity-40"></i>
                     <div class="relative z-10">
-                        <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider lang-dash-weather">สภาพอากาศเฉลี่ย</div>
-                        <div class="text-xl font-black">31.5°C</div>
+                        <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider lang-dash-weather">สภาพอากาศปัจจุบัน</div>
+                        <div id="real-temp" class="text-xl font-black">-- °C</div>
                     </div>
                     <div class="text-right text-[10px] font-bold text-slate-400 relative z-10">
-                        <div><i class="fas fa-droplet text-blue-400 mr-1"></i> 74%</div>
-                        <div><i class="fas fa-wind text-slate-400 mr-1"></i> 9.2 km/h</div>
+                        <div><i class="fas fa-droplet text-blue-400 mr-1"></i> <span id="real-humid">--</span></div>
+                        <div><i class="fas fa-wind text-slate-400 mr-1"></i> <span id="real-wind">--</span></div>
                     </div>
                 </div>
             </div>
@@ -252,6 +308,8 @@
                 <div class="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mt-1">PM2.5 Provincial Avg</div>
             </div>
         </div>
+
+        <div id="pm25-source-status" class="text-[10px] md:text-xs font-bold text-slate-400 flex items-center px-1"><i class="fas fa-circle text-slate-300 text-[6px] mr-1.5 animate-pulse"></i>กำลังเชื่อมต่อข้อมูลฝุ่นจริงจาก Open-Meteo...</div>
 
         <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200/80">
             <h2 class="text-sm font-black text-slate-900 uppercase tracking-wider mb-4 lang-air-table-title"><i class="fas fa-table-list text-blue-500 mr-2"></i>รายงานดัชนีคุณภาพอากาศแยกตามเขตการปกครอง</h2>
@@ -315,15 +373,137 @@
                     </div>
                 </div>
                 
-                <div class="pt-4 flex justify-center">
-                    <button id="btn-audio-control" onclick="toggleSpeechSynthesis()" class="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-wider shadow-md hover:bg-slate-800 transition flex items-center space-x-2 group">
-                        <i id="audio-icon" class="fas fa-volume-high group-hover:scale-110 transition-transform"></i>
-                        <span id="audio-text" class="lang-audio-listen">รับฟังรายงานเสียงสรุป</span>
-                    </button>
+                <!-- ====== Character Speech Widget (ข้อ 5) ====== -->
+                <div id="speech-character-panel" class="pt-2">
+                    <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl p-5 max-w-xl mx-auto relative overflow-hidden">
+                        <!-- ตัวการ์ตูนน่ารัก (SVG inline) -->
+                        <div class="flex items-end justify-center gap-4 mb-4">
+                            <!-- ตัวการ์ตูน -->
+                            <div class="relative shrink-0">
+                                <svg id="char-svg" width="90" height="110" viewBox="0 0 90 110" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-md">
+                                    <!-- ตัว -->
+                                    <ellipse cx="45" cy="90" rx="28" ry="18" fill="#FDE68A"/>
+                                    <!-- เสื้อ -->
+                                    <rect x="21" y="75" width="48" height="22" rx="12" fill="#60A5FA"/>
+                                    <!-- ริบบิ้น/ผ้ากันเปื้อน -->
+                                    <rect x="35" y="80" width="20" height="14" rx="5" fill="#F9A8D4"/>
+                                    <!-- หัว -->
+                                    <ellipse cx="45" cy="45" rx="28" ry="26" fill="#FBBF24"/>
+                                    <!-- ผม -->
+                                    <ellipse cx="45" cy="22" rx="22" ry="10" fill="#92400E"/>
+                                    <!-- ไว้ผมรอบด้านซ้าย -->
+                                    <ellipse cx="20" cy="32" rx="8" ry="12" fill="#92400E"/>
+                                    <!-- ไว้ผมรอบด้านขวา -->
+                                    <ellipse cx="70" cy="32" rx="8" ry="12" fill="#92400E"/>
+                                    <!-- หูซ้าย -->
+                                    <ellipse cx="18" cy="45" rx="5" ry="7" fill="#FBBF24"/>
+                                    <!-- หูขวา -->
+                                    <ellipse cx="72" cy="45" rx="5" ry="7" fill="#FBBF24"/>
+                                    <!-- ตาซ้าย -->
+                                    <ellipse cx="34" cy="43" rx="7" ry="7" fill="white"/>
+                                    <ellipse cx="35" cy="44" rx="4" ry="4" fill="#1E40AF"/>
+                                    <ellipse cx="36" cy="43" rx="1.5" ry="1.5" fill="white"/>
+                                    <!-- ตาขวา -->
+                                    <ellipse cx="56" cy="43" rx="7" ry="7" fill="white"/>
+                                    <ellipse cx="57" cy="44" rx="4" ry="4" fill="#1E40AF"/>
+                                    <ellipse cx="58" cy="43" rx="1.5" ry="1.5" fill="white"/>
+                                    <!-- แก้ม -->
+                                    <ellipse cx="25" cy="52" rx="5" ry="3.5" fill="#FCA5A5" opacity="0.7"/>
+                                    <ellipse cx="65" cy="52" rx="5" ry="3.5" fill="#FCA5A5" opacity="0.7"/>
+                                    <!-- ปาก (animated) -->
+                                    <g id="char-mouth">
+                                        <!-- ปากปิด (ปกติ) -->
+                                        <path id="mouth-closed" d="M38 58 Q45 63 52 58" stroke="#92400E" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                                        <!-- ปากเปิด (ขณะพูด) -->
+                                        <ellipse id="mouth-open" cx="45" cy="60" rx="8" ry="5" fill="#92400E" class="hidden"/>
+                                        <ellipse id="mouth-teeth" cx="45" cy="57.5" rx="6" ry="2" fill="white" class="hidden"/>
+                                    </g>
+                                    <!-- แขนซ้าย -->
+                                    <ellipse cx="13" cy="82" rx="6" ry="14" fill="#60A5FA" transform="rotate(-15 13 82)"/>
+                                    <!-- แขนขวา -->
+                                    <ellipse cx="77" cy="82" rx="6" ry="14" fill="#60A5FA" transform="rotate(15 77 82)"/>
+                                </svg>
+                                <!-- ฟอง speech bubble เล็กๆ จากการ์ตูน -->
+                                <div id="char-speaking-bubble" class="hidden absolute -top-1 -right-2 bg-white border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
+                                    <div class="flex gap-0.5 items-center">
+                                        <span class="block w-1 h-1 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0s"></span>
+                                        <span class="block w-1 h-1 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0.15s"></span>
+                                        <span class="block w-1 h-1 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0.3s"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- กล่อง subtitle -->
+                            <div class="flex-1 min-h-[80px] bg-white/80 backdrop-blur-sm border border-blue-200 rounded-2xl p-3 shadow-sm flex flex-col justify-center">
+                                <div id="subtitle-header" class="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1.5"><i class="fas fa-closed-captioning mr-1"></i>ซับไตเติล</div>
+                                <p id="speech-subtitle" class="text-xs md:text-sm font-bold text-slate-700 leading-relaxed min-h-[40px]">กดปุ่มด้านล่างเพื่อให้น้องอ่านสรุปให้ฟัง 🎙️</p>
+                            </div>
+                        </div>
+                        <!-- ปุ่มควบคุม -->
+                        <div class="flex items-center justify-center gap-3 flex-wrap">
+                            <button id="btn-audio-control" onclick="toggleSpeechSynthesis()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-7 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-300/40 transition-all flex items-center gap-2">
+                                <i id="audio-icon" class="fas fa-volume-high"></i>
+                                <span id="audio-text" class="lang-audio-listen">รับฟังรายงานเสียงสรุป</span>
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 text-center mt-2 font-medium">เสียงขึ้นอยู่กับการตั้งค่า TTS ของอุปกรณ์คุณ</p>
+                    </div>
+                </div>
+
                 </div>
             </div>
         </div>
     </main>
+
+    <!-- ====== Mascot เสียงพูด พร้อมซับไตเติล (ข้อ 5) ====== -->
+    <div id="mascot-overlay" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[10000] items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden relative animate-in">
+            <button onclick="terminateSpeechAudio()" class="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-white/90 text-slate-500 hover:bg-white hover:text-rose-500 shadow flex items-center justify-center transition"><i class="fas fa-xmark text-xs"></i></button>
+
+            <!-- ตัวการ์ตูนพูด (SVG ขยับปาก/กระพริบตา ตามจังหวะเสียง) -->
+            <div class="bg-gradient-to-b from-sky-100 to-blue-50 pt-8 pb-4 flex justify-center relative overflow-hidden">
+                <div class="absolute top-3 left-4 text-[10px] font-black text-blue-400 uppercase tracking-widest bg-white/70 px-2.5 py-1 rounded-full"><i class="fas fa-wind mr-1"></i>AirWise Buddy</div>
+                <svg id="mascot-svg" viewBox="0 0 200 200" class="w-44 h-44 drop-shadow-md">
+                    <!-- หู -->
+                    <ellipse cx="56" cy="58" rx="16" ry="20" fill="#7DD3FC"/>
+                    <ellipse cx="144" cy="58" rx="16" ry="20" fill="#7DD3FC"/>
+                    <ellipse cx="56" cy="58" rx="8" ry="11" fill="#BAE6FD"/>
+                    <ellipse cx="144" cy="58" rx="8" ry="11" fill="#BAE6FD"/>
+                    <!-- หัว -->
+                    <circle cx="100" cy="100" r="62" fill="#38BDF8"/>
+                    <circle cx="100" cy="100" r="62" fill="url(#mascotShine)" opacity="0.5"/>
+                    <!-- แก้ม -->
+                    <ellipse cx="62" cy="115" rx="11" ry="7" fill="#FCA5A5" opacity="0.55"/>
+                    <ellipse cx="138" cy="115" rx="11" ry="7" fill="#FCA5A5" opacity="0.55"/>
+                    <!-- ตา (กระพริบได้) -->
+                    <g id="mascot-eyes">
+                        <ellipse cx="78" cy="95" rx="9" ry="11" fill="#0F172A"/>
+                        <ellipse cx="122" cy="95" rx="9" ry="11" fill="#0F172A"/>
+                        <circle cx="81" cy="91" r="3" fill="#fff"/>
+                        <circle cx="125" cy="91" r="3" fill="#fff"/>
+                    </g>
+                    <!-- ปาก (ขยับตามจังหวะคำพูด) -->
+                    <ellipse id="mascot-mouth" cx="100" cy="128" rx="16" ry="6" fill="#0F172A"/>
+                    <ellipse id="mascot-mouth-inner" cx="100" cy="129" rx="9" ry="3" fill="#F87171"/>
+                </svg>
+                <defs>
+                    <radialGradient id="mascotShine" cx="35%" cy="30%" r="60%">
+                        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+                        <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                    </radialGradient>
+                </defs>
+            </div>
+
+            <!-- ซับไตเติล -->
+            <div class="p-5 space-y-3">
+                <div id="mascot-subtitle" class="min-h-[64px] bg-slate-50 border border-slate-100 rounded-2xl p-4 text-center text-sm font-bold text-slate-700 leading-relaxed flex items-center justify-center">
+                    <span class="lang-mascot-loading">กำลังเตรียมเสียงพูด...</span>
+                </div>
+                <div class="flex items-center justify-center gap-3">
+                    <button onclick="terminateSpeechAudio()" class="flex items-center gap-2 bg-rose-50 text-rose-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-rose-100 transition"><i class="fas fa-stop"></i><span class="lang-audio-stop">หยุดฟังรายงานเสียง</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <main id="view-map" class="view-section max-w-7xl w-full mx-auto p-4 h-[82vh]">
         <div class="bg-white p-4 md:p-5 rounded-[2rem] shadow-sm border border-slate-200/80 h-full flex flex-col relative">
@@ -439,10 +619,18 @@
 
     <div id="modal-admin-hero" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] justify-center items-center p-4">
         <div class="bg-white w-full max-w-md p-6 md:p-8 rounded-3xl space-y-5 shadow-2xl animate-in scale-95 duration-200">
-            <h3 class="font-black text-lg text-slate-900 border-b border-slate-100 pb-3"><i class="fas fa-image text-blue-500 mr-2"></i>ตั้งค่ารูปภาพหน้าปกระบบ (URL)</h3>
-            <div class="space-y-1">
-                <label class="text-xs font-bold text-slate-600">ที่อยู่ลิงก์รูปภาพประกอบ (Image URL)</label>
-                <input id="form-hero-url" type="text" placeholder="https://example.com/cover.jpg" class="w-full border border-slate-200 p-3 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 bg-slate-50">
+            <h3 class="font-black text-lg text-slate-900 border-b border-slate-100 pb-3"><i class="fas fa-image text-blue-500 mr-2"></i>ตั้งค่ารูปภาพหน้าปกระบบ</h3>
+            <div class="space-y-2">
+                <label class="text-xs font-bold text-slate-600">อัปโหลดรูปภาพจากเครื่องของคุณ</label>
+                <div id="hero-upload-zone" onclick="document.getElementById('form-hero-file').click()" class="relative w-full h-40 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer flex flex-col items-center justify-center overflow-hidden group">
+                    <img id="hero-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพหน้าปก">
+                    <div id="hero-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
+                        <i class="fas fa-cloud-arrow-up text-3xl mb-2"></i>
+                        <span class="text-xs font-bold">คลิกเพื่อเลือกรูปภาพ</span>
+                        <span class="text-[10px] text-slate-400 mt-1">รองรับ JPG, PNG, WebP (ไม่เกิน 4MB)</span>
+                    </div>
+                </div>
+                <input id="form-hero-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'hero-preview-img', 'hero-upload-placeholder')">
             </div>
             <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
                 <button onclick="closeActiveModal('modal-admin-hero')" class="px-4 py-2.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200 transition">ยกเลิก</button>
@@ -458,7 +646,18 @@
             <div class="space-y-3 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
                 <div><label class="text-xs font-bold text-slate-600 mb-1 block">หัวข้อข่าวสาร</label><input id="form-news-title" type="text" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></div>
                 <div><label class="text-xs font-bold text-slate-600 mb-1 block">เนื้อหาข่าวฉบับย่อ</label><textarea id="form-news-desc" rows="3" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></textarea></div>
-                <div><label class="text-xs font-bold text-slate-600 mb-1 block">ลิงก์ URL รูปภาพหน้าปกข่าว</label><input id="form-news-image" type="text" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></div>
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-600 block">รูปภาพหน้าปกข่าว</label>
+                    <div id="news-upload-zone" onclick="document.getElementById('form-news-file').click()" class="relative w-full h-32 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer flex flex-col items-center justify-center overflow-hidden group">
+                        <img id="news-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพข่าว">
+                        <div id="news-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
+                            <i class="fas fa-cloud-arrow-up text-2xl mb-1.5"></i>
+                            <span class="text-[11px] font-bold">คลิกเพื่อเลือกรูปภาพ</span>
+                        </div>
+                    </div>
+                    <input id="form-news-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'news-preview-img', 'news-upload-placeholder')">
+                    <input type="hidden" id="form-news-image">
+                </div>
                 <div><label class="text-xs font-bold text-slate-600 mb-1 block">วันที่เผยแพร่ข่าว</label><input id="form-news-date" type="date" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></div>
             </div>
             <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
@@ -496,7 +695,18 @@
                     <div><label class="text-xs font-bold text-slate-600 mb-1 block">ระดับชั้นการศึกษา (ม.)</label><input id="form-about-grade" type="text" placeholder="ม.5/X หรือ ม.6/X" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
                     <div><label class="text-xs font-bold text-slate-600 mb-1 block">ชื่อโรงเรียนสถานศึกษา</label><input id="form-about-school" type="text" value="โรงเรียนเตรียมอุดมศึกษาภาคใต้" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
                 </div>
-                <div><label class="text-xs font-bold text-slate-600 mb-1 block">ลิงก์ URL รูปถ่ายส่วนตัวสำหรับการ์ดโปรไฟล์</label><input id="form-about-image" type="text" placeholder="https://example.com/avatar.jpg" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-600 block">รูปถ่ายส่วนตัวสำหรับการ์ดโปรไฟล์</label>
+                    <div class="flex items-center gap-4">
+                        <div id="about-upload-zone" onclick="document.getElementById('form-about-file').click()" class="relative w-20 h-20 shrink-0 rounded-full border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer flex items-center justify-center overflow-hidden group">
+                            <img id="about-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างรูปโปรไฟล์">
+                            <i id="about-upload-placeholder" class="fas fa-camera text-slate-400 group-hover:text-blue-500 transition-colors text-lg"></i>
+                        </div>
+                        <div class="text-[11px] text-slate-400 leading-relaxed">คลิกที่วงกลมเพื่อเลือกรูปภาพจากเครื่องของคุณ<br>(แนะนำรูปสี่เหลี่ยมจัตุรัส ไม่เกิน 4MB)</div>
+                    </div>
+                    <input id="form-about-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'about-preview-img', 'about-upload-placeholder')">
+                    <input type="hidden" id="form-about-image">
+                </div>
                 <div><label class="text-xs font-bold text-slate-600 mb-1 block">ข้อมูลเพิ่มเติมอื่นๆ (เช่น ตำแหน่งในกลุ่ม, ความสามารถพิเศษ)</label><input id="form-about-custom" type="text" placeholder="หัวหน้าโครงงาน / นักพัฒนา Fullstack" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
             </div>
             <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
@@ -566,155 +776,6 @@ const districtIssuesData = {
     "อำเภอเฉลิมพระเกียรติ": { causes: ["การเผาฟางข้าวและเศษวัสดุทางการเกษตร", "ฝุ่นจากกิจกรรมเกษตร"], solutions: ["ส่งเสริมเกษตรปลอดการเผา", "ผลิตปุ๋ยหมักจากเศษพืช", "รณรงค์ลดการเผาในชุมชน"] }
 };
 
-// 2. [ระบบควบคุมแผนที่ (Leaflet GIS)]
-let map;
-let markerGroup; // กลุ่มของหมุดมลพิษ
-
-// ฟังก์ชันสร้างแผนที่เริ่มต้น (เรียกใช้เมื่อกดหน้า 'แผนที่มลพิษ')
-function initGisMap() {
-    // 1. ตรวจสอบว่ามีแผนที่เดิมหรือยัง ถ้ายังให้สร้างใหม่
-    if (!map) {
-        // สร้าง Object แผนที่และกำหนดพิกัดเริ่มต้น (ใจกลาง นศ.) และระดับการซูม
-        map = L.map('map-container', {
-            zoomControl: false // ปิด zoom control เดิมเพื่อขยับตำแหน่ง
-        }).setView([8.4330, 99.9634], 10);
-
-        // 2. [หน้าตาแมพมืออาชีพ] เลือกใช้ Tile Map แบบโทนสว่าง (Light Mode) ของ CartoDB
-        // ทำให้ข้อมูลฝุ่นและหมุดวงกลมดูเด่นชัดและคลีนมาก
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CartoDB &copy; OpenStreetMap'
-        }).addTo(map);
-
-        // ย้ายปุ่มซูมไปไว้ขวาบนเพื่อให้ไม่บังข้อมูล
-        L.control.zoom({ position: 'topright' }).addTo(map);
-
-        // สร้างกลุ่มสำหรับเก็บหมุดมลพิษ
-        markerGroup = L.layerGroup().addTo(map);
-    }
-    
-    // 3. วาดหมุดข้อมูลจริงลงบนแผนที่
-    renderMapMarkers();
-}
-
-// ฟังก์ชันสำหรับกำหนดสีตามเกณฑ์คุณภาพอากาศของไทย (PM2.5: µg/m³)
-function getAQIColor(pm25) {
-    if (pm25 <= 25) return '#10B981'; // สีเขียว (ดีมาก)
-    if (pm25 <= 37) return '#FBBF24'; // สีเหลือง (ปานกลาง)
-    if (pm25 <= 50) return '#F97316'; // สีส้ม (เริ่มมีผลกระทบ)
-    return '#EF4444'; // สีแดง (มีผลกระทบ)
-}
-
-// ฟังก์ชันสำหรับวาดหมุดข้อมูล (วงกลม) ลงบนแผนที่แบบ Real-time
-function renderMapMarkers() {
-    if (!markerGroup) return; // ถ้ากลุ่มหมุดยังไม่มี ไม่ต้องวาด
-
-    // ลบหมุดมลพิษอันเก่าออกให้หมดก่อนวาดใหม่ (ป้องกันการวาดซ้ำจนเครื่องค้าง)
-    markerGroup.clearLayers();
-
-    // วนลูปข้อมูลทุกอำเภอเพื่อสร้างหมุดใหม่
-    districtsData.forEach(district => {
-        const color = getAQIColor(district.pm25); // หาสีของหมุด
-
-        // 1. สร้างหมุดวงกลมแบบโปร่งแสง สไตล์มืออาชีพ
-        const circleMarker = L.circleMarker([district.lat, district.lng], {
-            radius: 13,          // ขนาดหมุด
-            fillColor: color,    // สีด้านใน
-            color: '#ffffff',    // สีขอบหมุด (สีขาว)
-            weight: 2,           // ความหนาของขอบ
-            opacity: 1,
-            fillOpacity: 0.85    // ความโปร่งแสง
-        }).addTo(markerGroup);
-
-        // 2. [หน้าตาแมพมืออาชีพ] สร้างเนื้อหา Pop-up สไตล์ Tailwind
-        circleMarker.bindPopup(`
-            <div class="p-1 font-sans">
-                <div class="text-sm font-extrabold text-slate-800 mb-1">${district.th}</div>
-                <div class="text-xs text-slate-500 mb-3">ดัชนีคุณภาพอากาศรายอำเภอ</div>
-                <div class="flex items-end gap-2 bg-slate-50 border border-slate-100 p-3 rounded-xl">
-                    <div class="text-4xl font-black" style="color: ${color}">${district.pm25}</div>
-                    <div class="text-xs font-bold text-slate-400 pb-1">µg/m³</div>
-                </div>
-                <div class="mt-3 text-center">
-                    <span class="text-xs font-bold px-3 py-1 rounded-full text-white" style="background-color: ${color}">
-                        ${district.pm25 <= 25 ? 'ดีมาก' : district.pm25 <= 37 ? 'ปานกลาง' : district.pm25 <= 50 ? 'เริ่มมีผลกระทบ' : 'มีผลกระทบ'}
-                    </span>
-                </div>
-            </div>
-        `, { maxWidth: 280, className: 'custom-leaflet-popup' });
-    });
-}
-
-// 2. ฟังก์ชันวาดหมุดบนแผนที่ (หน้าตาเดิม แต่ใช้ข้อมูลจริง)
-
-
-// 4. [ฟังก์ชันอื่นๆ ของระบบ]
-
-// ฟังก์ชันสลับมุมมองหน้าจอ
-function switchView(viewName) {
-    // ซ่อนทุกหน้าจอ
-    document.querySelectorAll('.view-content').forEach(view => view.classList.add('hidden'));
-    
-    // แสดงเฉพาะหน้าจอที่เลือก
-    if (viewName === 'home') {
-        document.getElementById('dashboard-view').classList.remove('hidden');
-        renderDashboardWidgets();
-    } else if (viewName === 'air') {
-        document.getElementById('table-view').classList.remove('hidden');
-        renderAirQualityTable();
-    } else if (viewName === 'map') {
-        document.getElementById('map-view').classList.remove('hidden');
-        initGisMap(); // เรียกสร้างแผนที่ใหม่เสมอ
-    } else if (viewName === 'about') {
-        document.getElementById('about-view').classList.remove('hidden');
-    } else if (viewName === 'join') {
-        document.getElementById('login-view').classList.remove('hidden');
-    }
-}
-
-// ฟังก์ชันเรนเดอร์ตารางคุณภาพอากาศ
-function renderAirQualityTable() {
-    const tableBody = document.getElementById('air-quality-tbody');
-    tableBody.innerHTML = ''; // ลบข้อมูลเดิม
-    
-    // เรียงข้อมูลตามค่าฝุ่นมากที่สุดไปหาน้อยที่สุด
-    const sortedData = [...districtsData].sort((a, b) => b.pm25 - a.pm25);
-
-    sortedData.forEach((district, index) => {
-        let statusText = "ดีมาก";
-        let statusColor = "bg-emerald-50 text-emerald-600";
-        if (district.pm25 > 25) { statusText = "ปานกลาง"; statusColor = "bg-amber-50 text-amber-600"; }
-        if (district.pm25 > 37) { statusText = "เริ่มมีผลกระทบ"; statusColor = "bg-orange-50 text-orange-600"; }
-        if (district.pm25 > 50) { statusText = "มีผลกระทบ"; statusColor = "bg-red-50 text-red-600"; }
-
-        tableBody.innerHTML += `
-            <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0">
-                <td class="py-4 px-3 text-sm font-bold text-slate-800 text-center">${index + 1}</td>
-                <td class="py-4 px-3 text-sm font-medium text-slate-700">${district.th}</td>
-                <td class="py-4 px-3 text-lg font-black text-blue-600 text-center">${district.pm25}</td>
-                <td class="py-4 px-3 text-center">
-                    <span class="text-[11px] font-bold px-2.5 py-1 rounded-lg ${statusColor}">${statusText}</span>
-                </td>
-            </tr>
-        `;
-    });
-}
-
-// ฟังก์ชันเรนเดอร์ Widget บน Dashboard
-function renderDashboardWidgets() {
-    // ค้นหาค่าฝุ่นที่สูงที่สุด
-    const maxPM25District = districtsData.reduce((max, d) => d.pm25 > max.pm25 ? d : max, districtsData[0]);
-    document.getElementById('max-pm25-val').textContent = maxPM25District.pm25;
-    document.getElementById('max-pm25-district').textContent = maxPM25District.th;
-}
-
-// ฟังก์ชันจัดการ Cookie Banner (ตัวอย่างเพื่อความสมบูรณ์)
-function acceptCookies() {
-    localStorage.setItem('airwise_cookie_accepted', 'true');
-    const banner = document.getElementById('cookie-banner');
-    if(banner) banner.classList.add('translate-y-full');
-}
-
-
         // -------------------------------------------------------------
         // [2] พจนานุกรมการแปลสลับภาษาเรียลไทม์ (Comprehensive Translation Dictionary)
         // -------------------------------------------------------------
@@ -765,35 +826,8 @@ function acceptCookies() {
         let isAudioPlayingState = false;
 
         // -------------------------------------------------------------
-        // [4] ฟังก์ชันการเปลี่ยนสลับหมวดหน้าจอหลัก (View Navigation Router)
+        // [4] (router หลักอยู่ด้านล่างสุดของไฟล์ ใช้ระบบ URL Hash)
         // -------------------------------------------------------------
-        window.switchView = function(targetViewId) {
-            // ระบบสั่งปิดหยุดเสียง AI ทันทีโดยอัตโนมัติเมื่อกดเปลี่ยนไปหน้าอื่นตามเงื่อนไขข้อกำหนด
-            terminateSpeechAudio();
-
-            // คลาสจัดการเอฟเฟกต์การแสดงผลหน้าต่างแบบสมูท
-            document.querySelectorAll('.view-section').forEach(element => {
-                element.classList.remove('active');
-            });
-            document.getElementById(`view-${targetViewId}`).classList.add('active');
-            
-            // อัปเดตปรับเปลี่ยนสไตล์ปุ่มนำทางในแถบเมนู (Navbar Indicators)
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.className = "nav-btn px-3 py-2 rounded-xl hover:text-blue-600 hover:bg-slate-50 transition font-bold text-slate-500";
-            });
-            if(document.getElementById(`nav-${targetViewId}`)) {
-                document.getElementById(`nav-${targetViewId}`).className = "nav-btn px-3 py-2 rounded-xl text-blue-600 bg-blue-50/50 font-bold";
-            }
-            
-            // รีเฟรชและคำนวณสัดส่วนพิกัดแผนที่เมื่อถูกเปิดเรียกใช้งาน (ป้องกันบั๊กแผนที่โหลดไม่สมบูรณ์)
-            if(targetViewId === 'map' && mainMapInstance) {
-                setTimeout(() => mainMapInstance.invalidateSize(), 250);
-            }
-            if(targetViewId === 'home' && homeMiniMapInstance) {
-                setTimeout(() => homeMiniMapInstance.invalidateSize(), 250);
-            }
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
 
         // -------------------------------------------------------------
         // [5] ฟังก์ชันวิเคราะห์คำนวณและประเมินเกณฑ์ค่าฝุ่นละออง (AI Analytical Core)
@@ -890,33 +924,143 @@ function acceptCookies() {
             }
         };
 
-        function executeSpeechAudioPlayback() {
-            terminateSpeechAudio(); // เคลียร์เสียงตกค้างก่อนหน้า
+        // แบ่งสคริปต์เป็นประโยคย่อยๆ สำหรับซับไตเติล (รองรับทั้งไทยและอังกฤษ)
+        function splitIntoSubtitleChunks(text) {
+            // แบ่งข้อความเป็นประโยคย่อยๆ สำหรับแสดงเป็น subtitle ทีละชิ้น
+            return text
+                .split(/(?<=[.!?:.])\s+|(?<=[\u0E00-\u0E7F])\s{2,}|\n+/)
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+        }
 
+        let mascotMouthInterval = null;
+        let mascotBlinkTimeout = null;
+
+        // ขยับปากตัวการ์ตูนระหว่างพูด (สลับระหว่าง mouth-open และ mouth-closed ตามจังหวะแบบธรรมชาติ)
+        function startMascotTalking() {
+            const mouthClosed = document.getElementById('mouth-closed');
+            const mouthOpen = document.getElementById('mouth-open');
+            const mouthTeeth = document.getElementById('mouth-teeth');
+            const bubble = document.getElementById('char-speaking-bubble');
+            if (!mouthClosed) return;
+            if (bubble) bubble.classList.remove('hidden');
+            stopMascotTalking();
+            let mouthIsOpen = false;
+            mascotMouthInterval = setInterval(() => {
+                if (!window.speechSynthesis.speaking) return;
+                mouthIsOpen = !mouthIsOpen;
+                if (mouthIsOpen) {
+                    mouthClosed.classList.add('hidden');
+                    mouthOpen.classList.remove('hidden');
+                    mouthTeeth.classList.remove('hidden');
+                    // สุ่มขนาดปาก ry ให้ดูเป็นธรรมชาติ
+                    mouthOpen.setAttribute('ry', (4 + Math.random() * 5).toFixed(1));
+                } else {
+                    mouthClosed.classList.remove('hidden');
+                    mouthOpen.classList.add('hidden');
+                    mouthTeeth.classList.add('hidden');
+                }
+            }, 120);
+        }
+
+        function stopMascotTalking() {
+            if (mascotMouthInterval) { clearInterval(mascotMouthInterval); mascotMouthInterval = null; }
+            const mouthClosed = document.getElementById('mouth-closed');
+            const mouthOpen = document.getElementById('mouth-open');
+            const mouthTeeth = document.getElementById('mouth-teeth');
+            const bubble = document.getElementById('char-speaking-bubble');
+            if (mouthClosed) mouthClosed.classList.remove('hidden');
+            if (mouthOpen) mouthOpen.classList.add('hidden');
+            if (mouthTeeth) mouthTeeth.classList.add('hidden');
+            if (bubble) bubble.classList.add('hidden');
+        }
+
+        // กระพริบตาเป็นช่วงๆ ให้ตัวการ์ตูนดูมีชีวิตชีวา (ไม่ได้ใช้กับ SVG ตัวการ์ตูนใหม่ที่ไม่มี mascot-eyes แต่ไว้สำรอง)
+        function scheduleMascotBlink() {
+            // ตัวการ์ตูนใหม่ใช้ CSS animation แทน JS blink ตรงนี้จึงไม่ต้องทำอะไร
+            mascotBlinkTimeout = setTimeout(scheduleMascotBlink, 3000 + Math.random() * 2000);
+        }
+
+        function stopMascotBlink() {
+            if (mascotBlinkTimeout) { clearTimeout(mascotBlinkTimeout); mascotBlinkTimeout = null; }
+        }
+
+        function executeSpeechAudioPlayback() {
+            terminateSpeechAudio();
             const currentDistrict = districtsData[currentlySelectedDistrictIndex];
             const evaluation = evaluatePm25Tier(currentDistrict.pm25);
-            let speechStringText = "";
-            let speechLocaleCode = currentLang === 'th' ? 'th-TH' : 'en-US';
+            const issues = districtIssuesData[currentDistrict.th];
+            const speechLocaleCode = currentLang === 'th' ? 'th-TH' : 'en-US';
+            let speechStringText = '';
 
             if (currentLang === 'th') {
-                speechStringText = `รายงานสถานการณ์คุณภาพอากาศพื้นที่ ${currentDistrict.th}. ตรวจวัดปริมาณฝุ่นละออง พีเอ็ม สองจุดห้า ได้ ${currentDistrict.pm25} ไมโครกรัมต่อลูกบาศก์เมตร เกณฑ์การประเมินอยู่ในระดับ ${evaluation.tierTh}. ข้อปฏิบัติแนะนำด้านสาธารณสุขคือ ${evaluation.adviceTh}`;
+                const causesText = issues ? issues.causes.join(' และ ') : 'ไม่มีข้อมูล';
+                const solutionsText = issues ? issues.solutions.join(' ') : 'ไม่มีข้อมูล';
+                speechStringText = `สวัสดีค่ะ! หนูจะรายงานคุณภาพอากาศของพื้นที่ ${currentDistrict.th} นะคะ. ตรวจวัดปริมาณฝุ่นละอองพีเอ็มสองจุดห้าได้ ${currentDistrict.pm25} ไมโครกรัมต่อลูกบาศก์เมตร. เกณฑ์การประเมินอยู่ในระดับ ${evaluation.tierTh}. ข้อแนะนำด้านสาธารณสุขคือ ${evaluation.adviceTh}. ปัญหาหลักในพื้นที่ได้แก่ ${causesText}. แนวทางการแก้ไขปัญหาคือ ${solutionsText}. ขอบคุณที่รับฟังค่ะ!`;
             } else {
-                speechStringText = `Air quality assessment broadcast for ${currentDistrict.en}. The measured PM 2.5 concentration level is ${currentDistrict.pm25} micrograms per cubic meter. The local environmental status is evaluated as ${evaluation.tierEn}. Public health advice: ${evaluation.adviceEn}`;
+                const causesText = issues ? issues.causes.join(', and ') : 'no data';
+                const solutionsText = issues ? issues.solutions.join(' ') : 'no data';
+                speechStringText = `Hello! I will report the air quality for ${currentDistrict.en}. PM 2.5 concentration is ${currentDistrict.pm25} micrograms per cubic meter. Status: ${evaluation.tierEn}. Health advice: ${evaluation.adviceEn}. Main causes: ${causesText}. Solutions: ${solutionsText}. Thank you!`;
             }
+
+            const subtitleChunks = splitIntoSubtitleChunks(speechStringText);
+            let chunkStartPositions = [];
+            let searchCursor = 0;
+            subtitleChunks.forEach(chunk => {
+                const idx = speechStringText.indexOf(chunk, searchCursor);
+                chunkStartPositions.push(idx >= 0 ? idx : searchCursor);
+                searchCursor = (idx >= 0 ? idx : searchCursor) + chunk.length;
+            });
+
+            const subtitleEl = document.getElementById('speech-subtitle');
+            if (subtitleEl) subtitleEl.innerHTML = `<span class="text-blue-700">${subtitleChunks[0] || ''}</span>`;
 
             currentSpeechInstance = new SpeechSynthesisUtterance(speechStringText);
             currentSpeechInstance.lang = speechLocaleCode;
             currentSpeechInstance.rate = 1.0;
+            currentSpeechInstance.pitch = 1.4;
 
+            const preferredVoice = pickFriendliestVoice(speechLocaleCode);
+            if (preferredVoice) currentSpeechInstance.voice = preferredVoice;
+
+            let currentChunkIndex = 0;
+            currentSpeechInstance.onboundary = (event) => {
+                const pos = event.charIndex;
+                while (currentChunkIndex < chunkStartPositions.length - 1 && pos >= chunkStartPositions[currentChunkIndex + 1]) {
+                    currentChunkIndex++;
+                }
+                if (subtitleEl) subtitleEl.innerHTML = `<span class="text-blue-700">${subtitleChunks[currentChunkIndex] || ''}</span>`;
+            };
+            currentSpeechInstance.onstart = () => { startMascotTalking(); };
             currentSpeechInstance.onend = () => {
+                if (subtitleEl) subtitleEl.innerHTML = '<span class="text-slate-500">✅ จบการรายงาน</span>';
+                setTimeout(() => { if (subtitleEl) subtitleEl.textContent = 'กดปุ่มด้านล่างเพื่อให้น้องอ่านสรุปให้ฟัง 🎙️'; }, 2500);
                 resetAudioPlaybackUIState(false);
             };
-            currentSpeechInstance.onerror = () => {
-                resetAudioPlaybackUIState(false);
-            };
+            currentSpeechInstance.onerror = () => { resetAudioPlaybackUIState(false); };
 
             window.speechSynthesis.speak(currentSpeechInstance);
             resetAudioPlaybackUIState(true);
+        }
+
+        // เลือกเสียงพูดที่ฟังดูสดใส/เหมาะกับเด็กที่สุดจากรายการเสียงที่เครื่องผู้ใช้มีอยู่
+        function pickFriendliestVoice(localeCode) {
+            const voices = window.speechSynthesis.getVoices();
+            if (!voices || voices.length === 0) return null;
+            const langPrefix = localeCode.split('-')[0];
+            const sameLangVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix));
+            if (sameLangVoices.length === 0) return null;
+            // เรียงให้เสียงที่มีคำว่า child/kid/female/Google ขึ้นก่อน (มักฟังดูสดใสกว่าเสียงมาตรฐาน)
+            const priorityKeywords = ['child', 'kid', 'female', 'girl', 'google', 'natural'];
+            sameLangVoices.sort((a, b) => {
+                const score = (v) => priorityKeywords.reduce((acc, kw) => acc + (v.name.toLowerCase().includes(kw) ? 1 : 0), 0);
+                return score(b) - score(a);
+            });
+            return sameLangVoices[0];
+        }
+        // เบราว์เซอร์บางตัวโหลดรายชื่อเสียงแบบ async ต้อง trigger ล่วงหน้าเพื่อให้ getVoices() พร้อมใช้งานทันที
+        if (typeof window.speechSynthesis !== 'undefined') {
+            window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
         }
 
         function terminateSpeechAudio() {
@@ -930,11 +1074,12 @@ function acceptCookies() {
             const btnText = document.getElementById('audio-text');
             
             if (isPlaying) {
-                btnIcon.className = "fas fa-circle-stop text-rose-500 animate-pulse";
-                btnText.innerText = currentLang === 'th' ? translationDictionary.th["audio-stop"] : translationDictionary.en["audio-stop"];
+                if (btnIcon) btnIcon.className = "fas fa-circle-stop text-rose-500 animate-pulse";
+                if (btnText) btnText.innerText = currentLang === 'th' ? translationDictionary.th["audio-stop"] : translationDictionary.en["audio-stop"];
             } else {
-                btnIcon.className = "fas fa-volume-high";
-                btnText.innerText = currentLang === 'th' ? translationDictionary.th["audio-listen"] : translationDictionary.en["audio-listen"];
+                if (btnIcon) btnIcon.className = "fas fa-volume-high";
+                if (btnText) btnText.innerText = currentLang === 'th' ? translationDictionary.th["audio-listen"] : translationDictionary.en["audio-listen"];
+                stopMascotTalking();
             }
         }
         // -------------------------------------------------------------
@@ -954,7 +1099,20 @@ function acceptCookies() {
                 attribution: '&copy; OpenStreetMap contributors & CARTO'
             }).addTo(mainMapInstance);
 
-            // วาดหมุดระบุพิกัดทั้ง 23 อำเภอ
+            // วาดหมุดข้อมูลทั้ง 23 อำเภอครั้งแรก
+            renderAllMapMarkers();
+        }
+
+        // ฟังก์ชันวาดหมุดทั้งหมดลงบนแผนที่ (เรียกได้ซ้ำทุกครั้งที่ข้อมูล PM2.5 อัปเดตจาก API จริง)
+        function renderAllMapMarkers() {
+            if (!mainMapInstance || !homeMiniMapInstance) return;
+
+            // ลบหมุดเก่าทั้งหมดออกก่อนวาดใหม่ ป้องกันหมุดซ้อนกัน
+            mainMapMarkersArray.forEach(m => mainMapInstance.removeLayer(m));
+            miniMapMarkersArray.forEach(m => homeMiniMapInstance.removeLayer(m));
+            mainMapMarkersArray = [];
+            miniMapMarkersArray = [];
+
             districtsData.forEach((district, index) => {
                 const assess = evaluatePm25Tier(district.pm25);
                 
@@ -977,8 +1135,11 @@ function acceptCookies() {
                     </div>
                 `;
 
-                L.marker([district.lat, district.lng], { icon: markerIcon }).addTo(mainMapInstance).bindPopup(mapPopupTemplate);
-                L.marker([district.lat, district.lng], { icon: markerIcon }).addTo(homeMiniMapInstance);
+                const mainMarker = L.marker([district.lat, district.lng], { icon: markerIcon }).addTo(mainMapInstance).bindPopup(mapPopupTemplate);
+                const miniMarker = L.marker([district.lat, district.lng], { icon: markerIcon }).addTo(homeMiniMapInstance);
+
+                mainMapMarkersArray.push(mainMarker);
+                miniMapMarkersArray.push(miniMarker);
             });
         }
 
@@ -1094,12 +1255,359 @@ function acceptCookies() {
             const coverUrl = localStorage.getItem('airwise_hero');
             document.getElementById('hero-section').style.backgroundImage = `linear-gradient(to right, rgba(255,255,255,0.96) 35%, rgba(255,255,255,0.2)), url('${coverUrl}')`;
         }
-        window.openHeroModal = () => { document.getElementById('form-hero-url').value = localStorage.getItem('airwise_hero'); openModal('modal-admin-hero'); };
+        window.openHeroModal = () => {
+            const existing = localStorage.getItem('airwise_hero');
+            const previewImg = document.getElementById('hero-preview-img');
+            const placeholder = document.getElementById('hero-upload-placeholder');
+            document.getElementById('form-hero-file').value = '';
+            if (existing) {
+                previewImg.src = existing;
+                previewImg.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                previewImg.dataset.base64 = existing;
+            } else {
+                previewImg.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+                delete previewImg.dataset.base64;
+            }
+            openModal('modal-admin-hero');
+        };
         window.processSaveHeroBanner = () => {
-            const url = document.getElementById('form-hero-url').value.trim();
-            if(!url) return alert(currentLang === 'th' ? "กรุณาระบุลิงก์รูปภาพ" : "Please provide an image URL.");
-            localStorage.setItem('airwise_hero', url);
-            renderHeroCover(); closeActiveModal('modal-admin-hero');
+            const previewImg = document.getElementById('hero-preview-img');
+            const newImageData = previewImg.dataset.base64;
+            if (!newImageData) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่ได้เลือกรูปภาพ' : 'No image selected', text: currentLang === 'th' ? 'กรุณาเลือกรูปภาพหน้าปกก่อนบันทึก' : 'Please choose a cover image first.', confirmButtonColor: '#3b82f6' });
+            localStorage.setItem('airwise_hero', newImageData);
+            renderHeroCover();
+            closeActiveModal('modal-admin-hero');
+            Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ' : 'Saved', text: currentLang === 'th' ? 'เปลี่ยนภาพหน้าปกเรียบร้อยแล้ว' : 'Cover image updated successfully.', timer: 1500, showConfirmButton: false });
+        };
+
+        // -------------------------------------------------------------
+        // ระบบ Image Cropper แบบ Interactive (ไม่ใช้ library ภายนอก)
+        // รองรับ 3 mode: 16:9 (hero/news), 1:1 circle (about member)
+        // -------------------------------------------------------------
+        let _cropState = {
+            img: null, previewImgId: null, placeholderId: null,
+            mode: '16:9', isCircle: false,
+            // drag state
+            dragging: false, resizing: false, resizeHandle: null,
+            startX: 0, startY: 0,
+            // crop box (normalised 0-1 relative to canvas display size)
+            box: { x: 0, y: 0, w: 0, h: 0 },
+            // canvas display scale: natural → displayed
+            scale: 1
+        };
+
+        function handleImageFileSelect(inputEl, previewImgId, placeholderId) {
+            const file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'ไฟล์ไม่ถูกต้อง' : 'Invalid file', text: currentLang === 'th' ? 'กรุณาเลือกไฟล์รูปภาพเท่านั้น' : 'Please select an image file.', confirmButtonColor: '#ef4444' });
+                inputEl.value = ''; return;
+            }
+            if (file.size > 8 * 1024 * 1024) {
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'ไฟล์ใหญ่เกินไป' : 'File too large', text: currentLang === 'th' ? 'ขนาดไฟล์ต้องไม่เกิน 8MB' : 'File size must not exceed 8MB.', confirmButtonColor: '#ef4444' });
+                inputEl.value = ''; return;
+            }
+
+            // กำหนด mode และ aspect ratio ตามช่องที่อัปโหลด
+            const isAbout = previewImgId === 'about-preview-img';
+            const isHero  = previewImgId === 'hero-preview-img';
+            const isNews  = previewImgId === 'news-preview-img';
+            _cropState.mode     = isAbout ? '1:1' : '16:9';
+            _cropState.isCircle = isAbout;
+            _cropState.outputW  = isAbout ? 400 : (isHero ? 1280 : 960);
+            _cropState.outputH  = isAbout ? 400 : (isHero ? 720  : 540);
+            _cropState.previewImgId  = previewImgId;
+            _cropState.placeholderId = placeholderId;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    _cropState.img = img;
+                    _openCropModal();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            inputEl.value = ''; // reset input ให้เลือกซ้ำได้
+        }
+
+        function _openCropModal() {
+            const modal = document.getElementById('crop-modal');
+            const canvas = document.getElementById('crop-canvas');
+            const label  = document.getElementById('crop-mode-label');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            label.textContent = _cropState.isCircle
+                ? 'โปรไฟล์วงกลม (1:1)'
+                : (_cropState.outputW === 1280 ? 'หน้าปกเว็บ (16:9)' : 'รูปข่าว (16:9)');
+
+            // ปรับขนาด canvas ให้พอดีหน้าจอ
+            requestAnimationFrame(() => _initCropCanvas(canvas));
+        }
+
+        function _initCropCanvas(canvas) {
+            const img = _cropState.img;
+            const container = canvas.parentElement;
+            const maxW = Math.min(container.clientWidth - 8, 680);
+            const maxH = Math.min(window.innerHeight * 0.55, 420);
+            const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+            const dW = Math.round(img.naturalWidth  * scale);
+            const dH = Math.round(img.naturalHeight * scale);
+
+            canvas.width  = dW;
+            canvas.height = dH;
+            _cropState.scale = scale;
+
+            // คำนวณ crop box เริ่มต้นให้พอดี aspect ratio กึ่งกลางรูป
+            const ar = _cropState.outputW / _cropState.outputH; // เช่น 16/9 หรือ 1
+            let bW, bH;
+            if (dW / dH > ar) { bH = dH * 0.9; bW = bH * ar; }
+            else               { bW = dW * 0.9; bH = bW / ar; }
+            bW = Math.round(bW); bH = Math.round(bH);
+            _cropState.box = {
+                x: Math.round((dW - bW) / 2),
+                y: Math.round((dH - bH) / 2),
+                w: bW, h: bH
+            };
+            _drawCrop(canvas);
+            _attachCropEvents(canvas);
+        }
+
+        function _drawCrop(canvas) {
+            const ctx = canvas.getContext('2d');
+            const { img, box, isCircle, scale } = _cropState;
+            const dW = canvas.width, dH = canvas.height;
+
+            // วาดรูปต้นฉบับ
+            ctx.clearRect(0, 0, dW, dH);
+            ctx.drawImage(img, 0, 0, dW, dH);
+
+            // overlay มืดนอก crop box
+            ctx.fillStyle = 'rgba(0,0,0,0.52)';
+            ctx.fillRect(0, 0, dW, dH);
+
+            // เปิดแสงใน crop box
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(box.x + box.w/2, box.y + box.h/2, box.w/2, box.h/2, 0, 0, Math.PI*2);
+                ctx.fill();
+            } else {
+                ctx.fillRect(box.x, box.y, box.w, box.h);
+            }
+            ctx.restore();
+
+            // วาดรูปกลับมาใน crop box เพื่อให้เห็นสีจริง
+            ctx.save();
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(box.x + box.w/2, box.y + box.h/2, box.w/2, box.h/2, 0, 0, Math.PI*2);
+                ctx.clip();
+            } else {
+                ctx.beginPath();
+                ctx.rect(box.x, box.y, box.w, box.h);
+                ctx.clip();
+            }
+            ctx.drawImage(img, 0, 0, dW, dH);
+            ctx.restore();
+
+            // เส้นขอบ crop box
+            ctx.strokeStyle = '#60A5FA';
+            ctx.lineWidth = 2;
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(box.x + box.w/2, box.y + box.h/2, box.w/2, box.h/2, 0, 0, Math.PI*2);
+                ctx.stroke();
+            } else {
+                ctx.strokeRect(box.x, box.y, box.w, box.h);
+                // Rule of thirds grid
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 0.8;
+                for (let i=1; i<3; i++) {
+                    const gx = box.x + box.w*(i/3), gy = box.y + box.h*(i/3);
+                    ctx.beginPath(); ctx.moveTo(gx, box.y); ctx.lineTo(gx, box.y+box.h); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(box.x, gy); ctx.lineTo(box.x+box.w, gy); ctx.stroke();
+                }
+            }
+
+            // corner handles (ไม่แสดงถ้าเป็น circle)
+            if (!isCircle) {
+                const handles = _getHandles();
+                ctx.fillStyle = '#ffffff';
+                ctx.strokeStyle = '#3B82F6';
+                ctx.lineWidth = 2;
+                handles.forEach(h => {
+                    ctx.beginPath();
+                    ctx.arc(h.x, h.y, 6, 0, Math.PI*2);
+                    ctx.fill(); ctx.stroke();
+                });
+            } else {
+                // วงกลม: แสดง 4 handle resize รอบวง
+                const cx = box.x + box.w/2, cy = box.y + box.h/2, r = box.w/2;
+                [[cx, cy-r],[cx, cy+r],[cx-r, cy],[cx+r, cy]].forEach(([hx, hy]) => {
+                    ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI*2);
+                    ctx.fillStyle='#fff'; ctx.fill();
+                    ctx.strokeStyle='#3B82F6'; ctx.lineWidth=2; ctx.stroke();
+                });
+            }
+        }
+
+        function _getHandles() {
+            const { box } = _cropState;
+            return [
+                { id:'tl', x: box.x,           y: box.y            },
+                { id:'tr', x: box.x + box.w,    y: box.y            },
+                { id:'bl', x: box.x,             y: box.y + box.h   },
+                { id:'br', x: box.x + box.w,     y: box.y + box.h   },
+            ];
+        }
+
+        function _getCanvasPos(canvas, e) {
+            const rect = canvas.getBoundingClientRect();
+            const src = e.touches ? e.touches[0] : e;
+            return { x: (src.clientX - rect.left) * (canvas.width / rect.width), y: (src.clientY - rect.top) * (canvas.height / rect.height) };
+        }
+
+        function _hitHandle(pos) {
+            const handles = _cropState.isCircle
+                ? (() => {
+                    const {box} = _cropState;
+                    const cx=box.x+box.w/2, cy=box.y+box.h/2, r=box.w/2;
+                    return [{id:'t',x:cx,y:cy-r},{id:'b',x:cx,y:cy+r},{id:'l',x:cx-r,y:cy},{id:'r',x:cx+r,y:cy}];
+                  })()
+                : _getHandles();
+            for (const h of handles) {
+                if (Math.hypot(pos.x-h.x, pos.y-h.y) < 12) return h.id;
+            }
+            return null;
+        }
+
+        function _insideBox(pos) {
+            const {box} = _cropState;
+            return pos.x >= box.x && pos.x <= box.x+box.w && pos.y >= box.y && pos.y <= box.y+box.h;
+        }
+
+        function _attachCropEvents(canvas) {
+            // ลบ listener เก่าก่อน (clone trick)
+            const fresh = canvas.cloneNode(true);
+            canvas.parentNode.replaceChild(fresh, canvas);
+            const c = document.getElementById('crop-canvas');
+
+            const onStart = (e) => {
+                e.preventDefault();
+                const pos = _getCanvasPos(c, e);
+                const handle = _hitHandle(pos);
+                if (handle) {
+                    _cropState.resizing = true; _cropState.resizeHandle = handle;
+                } else if (_insideBox(pos)) {
+                    _cropState.dragging = true;
+                }
+                _cropState.startX = pos.x; _cropState.startY = pos.y;
+                _cropState.boxSnap = { ..._cropState.box };
+            };
+            const onMove = (e) => {
+                e.preventDefault();
+                if (!_cropState.dragging && !_cropState.resizing) return;
+                const pos = _getCanvasPos(c, e);
+                const dx = pos.x - _cropState.startX, dy = pos.y - _cropState.startY;
+                const W = c.width, H = c.height;
+                const snap = _cropState.boxSnap;
+                const ar = _cropState.outputW / _cropState.outputH;
+
+                if (_cropState.dragging) {
+                    _cropState.box.x = Math.max(0, Math.min(W - snap.w, snap.x + dx));
+                    _cropState.box.y = Math.max(0, Math.min(H - snap.h, snap.y + dy));
+                } else if (_cropState.resizing) {
+                    let { x, y, w, h } = snap;
+                    const MIN = 40;
+                    const h_id = _cropState.resizeHandle;
+
+                    if (_cropState.isCircle) {
+                        // สำหรับ circle: ขยายจาก center
+                        const cx = x + w/2, cy = y + h/2;
+                        let newR;
+                        if (h_id==='t'||h_id==='b') newR = Math.abs((h_id==='t' ? snap.y+snap.h/2-pos.y : pos.y-snap.y-snap.h/2));
+                        else                         newR = Math.abs((h_id==='l' ? snap.x+snap.w/2-pos.x : pos.x-snap.x-snap.w/2));
+                        newR = Math.max(MIN/2, newR);
+                        const maxR = Math.min(cx, W-cx, cy, H-cy);
+                        newR = Math.min(newR, maxR);
+                        _cropState.box = { x: cx-newR, y: cy-newR, w: newR*2, h: newR*2 };
+                    } else {
+                        // สำหรับ rectangle: lock aspect ratio
+                        if (h_id==='br') { w = Math.max(MIN, snap.w+dx); h = w/ar; }
+                        else if (h_id==='bl') { w = Math.max(MIN, snap.w-dx); h = w/ar; x = snap.x + snap.w - w; }
+                        else if (h_id==='tr') { w = Math.max(MIN, snap.w+dx); h = w/ar; y = snap.y + snap.h - h; }
+                        else if (h_id==='tl') { w = Math.max(MIN, snap.w-dx); h = w/ar; x = snap.x+snap.w-w; y = snap.y+snap.h-h; }
+                        // clamp ไม่ให้เกินขอบ canvas
+                        if (x < 0) { w += x; h = w/ar; x = 0; }
+                        if (y < 0) { h += y; w = h*ar; y = 0; }
+                        if (x+w > W) { w = W-x; h = w/ar; }
+                        if (y+h > H) { h = H-y; w = h*ar; }
+                        _cropState.box = { x, y, w: Math.max(MIN,w), h: Math.max(MIN/ar,h) };
+                    }
+                }
+                _drawCrop(c);
+            };
+            const onEnd = () => { _cropState.dragging = false; _cropState.resizing = false; };
+
+            c.addEventListener('mousedown',  onStart);
+            c.addEventListener('mousemove',  onMove);
+            c.addEventListener('mouseup',    onEnd);
+            c.addEventListener('touchstart', onStart, { passive: false });
+            c.addEventListener('touchmove',  onMove,  { passive: false });
+            c.addEventListener('touchend',   onEnd);
+        }
+
+        window.applyCrop = function() {
+            const canvas = document.getElementById('crop-canvas');
+            const { img, box, isCircle, outputW, outputH, previewImgId, placeholderId, scale } = _cropState;
+
+            // สร้าง output canvas ด้วยขนาดจริงที่กำหนด (ไม่ใช่ขนาด display)
+            const outCanvas = document.createElement('canvas');
+            outCanvas.width  = outputW;
+            outCanvas.height = outputH;
+            const ctx = outCanvas.getContext('2d');
+
+            // แปลง crop box จาก canvas display coordinates → natural image coordinates
+            const srcX = Math.round(box.x / scale);
+            const srcY = Math.round(box.y / scale);
+            const srcW = Math.round(box.w / scale);
+            const srcH = Math.round(box.h / scale);
+
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(outputW/2, outputH/2, outputW/2, outputH/2, 0, 0, Math.PI*2);
+                ctx.clip();
+            }
+            ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outputW, outputH);
+
+            const dataUrl = outCanvas.toDataURL('image/jpeg', 0.88);
+
+            // ใส่ลง preview
+            const previewImg = document.getElementById(previewImgId);
+            const placeholder = document.getElementById(placeholderId);
+            previewImg.src = dataUrl;
+            previewImg.dataset.base64 = dataUrl;
+            previewImg.classList.remove('hidden');
+            if (placeholder) placeholder.classList.add('hidden');
+
+            // ใส่ใน hidden input (สำหรับ news / about)
+            if (previewImgId === 'news-preview-img') document.getElementById('form-news-image').value = dataUrl;
+            if (previewImgId === 'about-preview-img') document.getElementById('form-about-image').value = dataUrl;
+
+            // ปิด modal
+            document.getElementById('crop-modal').classList.add('hidden');
+            document.getElementById('crop-modal').classList.remove('flex');
+        };
+
+        window.closeCropModal = function() {
+            document.getElementById('crop-modal').classList.add('hidden');
+            document.getElementById('crop-modal').classList.remove('flex');
         };
 
         // --- 9.3 ระบบจัดการข่าวสาร (News Engine) ---
@@ -1139,7 +1647,20 @@ function acceptCookies() {
             }
         };
 
-        window.openNewsModal = () => { document.getElementById('form-news-edit-id').value = ''; document.getElementById('form-news-title').value = ''; document.getElementById('form-news-desc').value = ''; document.getElementById('form-news-image').value = ''; document.getElementById('form-news-date').value = ''; document.getElementById('news-modal-title').innerHTML = `<i class="fas fa-bullhorn text-blue-500 mr-2"></i>${currentLang === 'th' ? "เขียนข่าวประกาศประชาสัมพันธ์ใหม่" : "Create New Announcement"}`; openModal('modal-admin-news'); };
+        window.openNewsModal = () => {
+            document.getElementById('form-news-edit-id').value = '';
+            document.getElementById('form-news-title').value = '';
+            document.getElementById('form-news-desc').value = '';
+            document.getElementById('form-news-image').value = '';
+            document.getElementById('form-news-file').value = '';
+            document.getElementById('form-news-date').value = '';
+            const previewImg = document.getElementById('news-preview-img');
+            previewImg.classList.add('hidden');
+            delete previewImg.dataset.base64;
+            document.getElementById('news-upload-placeholder').classList.remove('hidden');
+            document.getElementById('news-modal-title').innerHTML = `<i class="fas fa-bullhorn text-blue-500 mr-2"></i>${currentLang === 'th' ? "เขียนข่าวประกาศประชาสัมพันธ์ใหม่" : "Create New Announcement"}`;
+            openModal('modal-admin-news');
+        };
         
         window.processSaveNewsRecord = () => {
             const id = document.getElementById('form-news-edit-id').value;
@@ -1148,7 +1669,7 @@ function acceptCookies() {
             const image = document.getElementById('form-news-image').value.trim();
             const date = document.getElementById('form-news-date').value;
 
-            if(!title || !desc || !image || !date) return alert(currentLang === 'th' ? "กรุณากรอกข้อมูลให้ครบถ้วน" : "Please fill all fields.");
+            if(!title || !desc || !image || !date) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณากรอกข้อมูลและอัปโหลดรูปภาพให้ครบถ้วน' : 'Please fill all fields and upload an image.', confirmButtonColor: '#3b82f6' });
 
             let newsList = JSON.parse(localStorage.getItem('airwise_news') || "[]");
             if(id) {
@@ -1159,6 +1680,7 @@ function acceptCookies() {
             }
             localStorage.setItem('airwise_news', JSON.stringify(newsList));
             renderNewsCards(); closeActiveModal('modal-admin-news');
+            Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'สำเร็จ' : 'Success', text: currentLang === 'th' ? 'บันทึกข่าวประกาศเรียบร้อยแล้ว' : 'News announcement saved successfully.', timer: 1500, showConfirmButton: false });
         };
 
         window.editNewsRecord = (id, event) => {
@@ -1170,19 +1692,36 @@ function acceptCookies() {
                 document.getElementById('form-news-title').value = news.title;
                 document.getElementById('form-news-desc').value = news.desc;
                 document.getElementById('form-news-image').value = news.image;
+                document.getElementById('form-news-file').value = '';
                 document.getElementById('form-news-date').value = news.date;
+                const previewImg = document.getElementById('news-preview-img');
+                previewImg.src = news.image;
+                previewImg.dataset.base64 = news.image;
+                previewImg.classList.remove('hidden');
+                document.getElementById('news-upload-placeholder').classList.add('hidden');
                 document.getElementById('news-modal-title').innerHTML = `<i class="fas fa-pen text-amber-500 mr-2"></i>${currentLang === 'th' ? "แก้ไขข่าวสาร" : "Edit Announcement"}`;
                 openModal('modal-admin-news');
             }
         };
 
-        window.deleteNewsRecord = (id, event) => {
+        window.deleteNewsRecord = async (id, event) => {
             event.stopPropagation();
-            if(confirm(currentLang === 'th' ? "ยืนยันการลบข่าวสารนี้หรือไม่?" : "Are you sure you want to delete this news?")) {
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: currentLang === 'th' ? 'ยืนยันการลบข่าว' : 'Confirm Delete',
+                text: currentLang === 'th' ? 'ต้องการลบข่าวสารนี้ออกจากระบบหรือไม่?' : 'Are you sure you want to delete this news?',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: currentLang === 'th' ? '✕ ลบเลย' : 'Yes, delete',
+                cancelButtonText: currentLang === 'th' ? 'ยกเลิก' : 'Cancel'
+            });
+            if (result.isConfirmed) {
                 let newsList = JSON.parse(localStorage.getItem('airwise_news') || "[]");
                 newsList = newsList.filter(n => n.id !== id);
                 localStorage.setItem('airwise_news', JSON.stringify(newsList));
                 renderNewsCards();
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'ลบสำเร็จ' : 'Deleted', timer: 1200, showConfirmButton: false });
             }
         };
 
@@ -1257,7 +1796,12 @@ function acceptCookies() {
         };
 
         window.openAboutModal = () => {
-            document.getElementById('form-about-edit-id').value = ''; document.getElementById('form-about-name').value = ''; document.getElementById('form-about-nickname').value = ''; document.getElementById('form-about-age').value = ''; document.getElementById('form-about-grade').value = ''; document.getElementById('form-about-school').value = 'โรงเรียนเตรียมอุดมศึกษาภาคใต้'; document.getElementById('form-about-image').value = ''; document.getElementById('form-about-custom').value = ''; document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-plus text-blue-500 mr-2"></i>${currentLang === 'th' ? "เพิ่มข้อมูลคณะผู้จัดทำใหม่" : "Add New Member"}`; openModal('modal-admin-about');
+            document.getElementById('form-about-edit-id').value = ''; document.getElementById('form-about-name').value = ''; document.getElementById('form-about-nickname').value = ''; document.getElementById('form-about-age').value = ''; document.getElementById('form-about-grade').value = ''; document.getElementById('form-about-school').value = 'โรงเรียนเตรียมอุดมศึกษาภาคใต้'; document.getElementById('form-about-image').value = ''; document.getElementById('form-about-file').value = ''; document.getElementById('form-about-custom').value = '';
+            const previewImg = document.getElementById('about-preview-img');
+            previewImg.classList.add('hidden');
+            delete previewImg.dataset.base64;
+            document.getElementById('about-upload-placeholder').classList.remove('hidden');
+            document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-plus text-blue-500 mr-2"></i>${currentLang === 'th' ? "เพิ่มข้อมูลคณะผู้จัดทำใหม่" : "Add New Member"}`; openModal('modal-admin-about');
         };
 
         window.processSaveAboutRecord = () => {
@@ -1270,7 +1814,7 @@ function acceptCookies() {
             const image = document.getElementById('form-about-image').value.trim();
             const custom = document.getElementById('form-about-custom').value.trim();
 
-            if(!name) return alert(currentLang === 'th' ? "กรุณาระบุชื่อ-นามสกุล" : "Please provide Name.");
+            if(!name) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณาระบุชื่อ-นามสกุล' : 'Please provide a name.', confirmButtonColor: '#4f46e5' });
 
             let members = JSON.parse(localStorage.getItem('airwise_about') || "[]");
             if(id) {
@@ -1281,22 +1825,46 @@ function acceptCookies() {
             }
             localStorage.setItem('airwise_about', JSON.stringify(members));
             renderAboutCards(); closeActiveModal('modal-admin-about');
+            Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'สำเร็จ' : 'Success', text: currentLang === 'th' ? 'บันทึกข้อมูลคณะผู้จัดทำเรียบร้อยแล้ว' : 'Team member info saved successfully.', timer: 1500, showConfirmButton: false });
         };
 
         window.editAboutRecord = (id) => {
             const members = JSON.parse(localStorage.getItem('airwise_about') || "[]");
             const member = members.find(m => m.id === id);
             if(member) {
-                document.getElementById('form-about-edit-id').value = member.id; document.getElementById('form-about-name').value = member.name; document.getElementById('form-about-nickname').value = member.nickname; document.getElementById('form-about-age').value = member.age; document.getElementById('form-about-grade').value = member.grade; document.getElementById('form-about-school').value = member.school; document.getElementById('form-about-image').value = member.image; document.getElementById('form-about-custom').value = member.custom; document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-pen text-amber-500 mr-2"></i>${currentLang === 'th' ? "แก้ไขประวัติผู้จัดทำ" : "Edit Member Profile"}`; openModal('modal-admin-about');
+                document.getElementById('form-about-edit-id').value = member.id; document.getElementById('form-about-name').value = member.name; document.getElementById('form-about-nickname').value = member.nickname; document.getElementById('form-about-age').value = member.age; document.getElementById('form-about-grade').value = member.grade; document.getElementById('form-about-school').value = member.school; document.getElementById('form-about-image').value = member.image; document.getElementById('form-about-file').value = ''; document.getElementById('form-about-custom').value = member.custom;
+                const previewImg = document.getElementById('about-preview-img');
+                if (member.image) {
+                    previewImg.src = member.image;
+                    previewImg.dataset.base64 = member.image;
+                    previewImg.classList.remove('hidden');
+                    document.getElementById('about-upload-placeholder').classList.add('hidden');
+                } else {
+                    previewImg.classList.add('hidden');
+                    delete previewImg.dataset.base64;
+                    document.getElementById('about-upload-placeholder').classList.remove('hidden');
+                }
+                document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-pen text-amber-500 mr-2"></i>${currentLang === 'th' ? "แก้ไขประวัติผู้จัดทำ" : "Edit Member Profile"}`; openModal('modal-admin-about');
             }
         };
 
-        window.deleteAboutRecord = (id) => {
-            if(confirm(currentLang === 'th' ? "ยืนยันการลบผู้จัดทำออกจากระบบ?" : "Are you sure you want to remove this member?")) {
+        window.deleteAboutRecord = async (id) => {
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: currentLang === 'th' ? 'ยืนยันการลบสมาชิก' : 'Confirm Delete',
+                text: currentLang === 'th' ? 'ต้องการลบสมาชิกคณะผู้จัดทำออกจากระบบหรือไม่?' : 'Are you sure you want to remove this member?',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: currentLang === 'th' ? '✕ ลบเลย' : 'Yes, remove',
+                cancelButtonText: currentLang === 'th' ? 'ยกเลิก' : 'Cancel'
+            });
+            if (result.isConfirmed) {
                 let members = JSON.parse(localStorage.getItem('airwise_about') || "[]");
                 members = members.filter(m => m.id !== id);
                 localStorage.setItem('airwise_about', JSON.stringify(members));
                 renderAboutCards();
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'ลบสำเร็จ' : 'Removed', timer: 1200, showConfirmButton: false });
             }
         };
 
@@ -1326,14 +1894,13 @@ function acceptCookies() {
             const pass = document.getElementById('input-admin-password').value;
             
             if (user === "Adminpmproject" && pass === "Admin123") {
-                alert(currentLang === 'th' ? "ยืนยันสิทธิ์แอดมินสำเร็จ! กำลังเข้าสู่โหมดผู้ดูแลระบบ" : "Admin access granted!");
                 document.getElementById('input-admin-username').value = '';
                 document.getElementById('input-admin-password').value = '';
-                // สร้างออบเจกต์จำลองสำหรับแอดมินระบบหลัก
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบแอดมินสำเร็จ!' : 'Admin Access Granted!', text: currentLang === 'th' ? 'ยินดีต้อนรับผู้ดูแลระบบ AIRWISE' : 'Welcome, AIRWISE Administrator', timer: 1800, showConfirmButton: false });
                 const mockAdminUser = { email: "admin@airwise.system", displayName: "System Administrator" };
                 setLoginState(true, mockAdminUser);
             } else {
-                alert(currentLang === 'th' ? "รหัสแอดมินหรือรหัสผ่านไม่ถูกต้อง ปฏิเสธการเข้าถึง" : "Access Denied. Invalid Admin Credentials.");
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Access Denied', text: currentLang === 'th' ? 'รหัสแอดมินหรือรหัสผ่านไม่ถูกต้อง ปฏิเสธการเข้าถึง' : 'Invalid admin credentials. Access denied.', confirmButtonColor: '#ef4444' });
             }
         };
 
@@ -1342,25 +1909,26 @@ function acceptCookies() {
             const email = document.getElementById('input-auth-email').value;
             const password = document.getElementById('input-auth-password').value;
             
-            if (!email || !password) return alert(currentLang === 'th' ? "กรุณากรอกข้อมูลอีเมลและรหัสผ่านให้ครบถ้วน" : "Please enter both email and password.");
+            if (!email || !password) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'กรุณากรอกข้อมูลให้ครบ' : 'Missing Info', text: currentLang === 'th' ? 'กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน' : 'Please enter both email and password.', confirmButtonColor: '#3b82f6' });
 
             if (window.fbAuth) {
                 try {
                     if (action === 'register') {
                         const userCredential = await window.fbModules.createUserWithEmailAndPassword(window.fbAuth, email, password);
-                        alert(currentLang === 'th' ? "ลงทะเบียนบัญชีใหม่สำเร็จ!" : "Account created successfully!");
+                        Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'สมัครสมาชิกสำเร็จ!' : 'Account Created!', text: currentLang === 'th' ? 'สร้างบัญชีใหม่บนระบบ AIRWISE เรียบร้อยแล้ว' : 'Your AIRWISE account has been created.', timer: 1800, showConfirmButton: false });
                         setLoginState(false, userCredential.user);
                     } else {
                         const userCredential = await window.fbModules.signInWithEmailAndPassword(window.fbAuth, email, password);
                         const isAdmin = email === "admin@airwise.com";
+                        Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบสำเร็จ' : 'Signed In', text: currentLang === 'th' ? 'ยินดีต้อนรับเข้าสู่ระบบ AIRWISE' : 'Welcome back to AIRWISE!', timer: 1500, showConfirmButton: false });
                         setLoginState(isAdmin, userCredential.user);
                     }
                 } catch (error) {
                     console.error("Auth Error:", error);
-                    alert(`Authentication Failed: ${error.message}`);
+                    Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'เกิดข้อผิดพลาด' : 'Authentication Failed', text: error.message, confirmButtonColor: '#ef4444' });
                 }
             } else {
-                alert(currentLang === 'th' ? "[โหมดออฟไลน์] ยังไม่ได้ตั้งค่าคีย์ Firebase กรุณาใช้ระบบแอดมินจำลองเข้าสู่ระบบแทน" : "[Offline Mode] Firebase not configured.");
+                Swal.fire({ icon: 'info', title: currentLang === 'th' ? 'โหมดออฟไลน์' : 'Offline Mode', text: currentLang === 'th' ? 'ยังไม่ได้ตั้งค่า Firebase กรุณาใช้ระบบแอดมินจำลองแทน' : 'Firebase not configured. Please use the admin panel.', confirmButtonColor: '#3b82f6' });
             }
         };
 
@@ -1372,10 +1940,10 @@ function acceptCookies() {
                     setLoginState(isAdmin, result.user);
                 } catch (error) {
                     console.error("Google Auth Error:", error);
-                    alert("Google Sign-In failed.");
+                    Swal.fire({ icon: 'error', title: 'Google Sign-In Failed', text: error.message, confirmButtonColor: '#ef4444' });
                 }
             } else {
-                alert(currentLang === 'th' ? "[โหมดออฟไลน์] ยังไม่ได้ตั้งค่าคีย์ Firebase" : "[Offline Mode] Firebase not configured.");
+                Swal.fire({ icon: 'info', title: currentLang === 'th' ? 'โหมดออฟไลน์' : 'Offline Mode', text: currentLang === 'th' ? 'ยังไม่ได้ตั้งค่า Firebase' : '[Offline Mode] Firebase not configured.', confirmButtonColor: '#3b82f6' });
             }
         };
 
@@ -1386,7 +1954,7 @@ function acceptCookies() {
                 } catch (error) { console.error(error); }
             }
             setLoginState(false, null);
-            alert(currentLang === 'th' ? "ออกจากระบบสำเร็จ" : "Signed out successfully");
+            Swal.fire({ icon: 'info', title: currentLang === 'th' ? 'ออกจากระบบแล้ว' : 'Signed Out', text: currentLang === 'th' ? 'ออกจากระบบ AIRWISE เรียบร้อยแล้ว' : 'You have been signed out successfully.', timer: 1500, showConfirmButton: false });
         };
 
         // ฟังก์ชันควบคุม UI เมื่อสถานะ Login เปลี่ยนแปลง
@@ -1484,6 +2052,9 @@ window.switchView = function(view) {
 
 // 2. สร้างระบบดักจับ (Router) เมื่อ URL เปลี่ยน หรือผู้ใช้กดย้อนกลับ/ไปข้างหน้า
 window.addEventListener('hashchange', () => {
+    // ปิดเสียง AI และตัวการ์ตูนทันทีเมื่อเปลี่ยนไปหน้าอื่น
+    terminateSpeechAudio();
+
     // อ่านค่าว่าตอนนี้อยู่หน้าอะไร
     let hash = window.location.hash.replace('#', '');
     if (!hash) hash = 'home'; // ถ้าไม่มีให้ค่าเริ่มต้นเป็นหน้า home
@@ -1499,10 +2070,9 @@ window.addEventListener('hashchange', () => {
         activeView.classList.add('active');
     }
 
-    // คืนค่าสีแถบเมนูด้านบน (ถ้ามี)
-    document.querySelectorAll('nav button').forEach(btn => {
-        // ล้างคลาส active ของเมนูเก่าออก
-        btn.classList.remove('text-blue-600', 'bg-blue-50/50', 'bg-slate-50'); 
+    // คืนค่าสีแถบเมนูด้านบน (เฉพาะปุ่มเนวบาร์หลักที่มี id nav-*)
+    document.querySelectorAll('[id^="nav-"]').forEach(btn => {
+        btn.classList.remove('text-blue-600', 'bg-blue-50/50', 'bg-slate-50');
     });
     const activeNav = document.getElementById(`nav-${hash}`);
     if (activeNav) {
@@ -1519,159 +2089,30 @@ window.addEventListener('hashchange', () => {
 
     // เมื่อเปลี่ยนหน้าแล้วให้เลื่อนสมูทกลับไปบนสุดเสมอ
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // แสดง/ซ่อน contact widget เฉพาะหน้าแรก
+    const contactWidget = document.getElementById('contact-widget');
+    const contactCard = document.getElementById('contact-card');
+    const contactIcon = document.getElementById('contact-fab-icon');
+    if (contactWidget) {
+        if (hash === 'home') {
+            contactWidget.classList.remove('hidden');
+        } else {
+            contactWidget.classList.add('hidden');
+            if (contactCard) contactCard.classList.add('hidden');
+            if (contactIcon) contactIcon.className = 'fas fa-headset text-xl';
+        }
+    }
 });
 
 // 3. เมื่อเปิดเว็บครั้งแรก ให้ระบบทำงานอัตโนมัติตาม URL ปัจจุบัน
+// (fire hashchange ทันทีเพื่อ init หน้าและ nav highlight)
+(function initRouter() {
+    const e = new Event('hashchange');
+    window.dispatchEvent(e);
+})();
 
-function saveNewsItem() {
-    const t = document.getElementById('news-input-title').value;
-    const d = document.getElementById('news-input-detail').value;
-    const i = document.getElementById('news-input-img').value;
-    
-    if(!t || !d) { 
-        Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบถ้วน', text: 'กรุณากรอกข้อมูลข่าวประกาศให้ครบถ้วน', confirmButtonColor: '#3b82f6' });
-        return; 
-    }
-    
-    customNews.unshift({ title: t, detail: d, img: i });
-    localStorage.setItem('airwise_news', JSON.stringify(customNews));
-    renderNewsFeed();
-    closeNewsModal();
-    document.getElementById('news-input-title').value = '';
-    document.getElementById('news-input-detail').value = '';
-    
-    Swal.fire({ icon: 'success', title: 'สำเร็จ', text: 'โพสต์ประกาศข่าวสารเรียบร้อยแล้ว', timer: 1500, showConfirmButton: false });
-}
 
-// 2. ฟังก์ชันลบข่าวสาร
-function deleteNewsItem(index) {
-    Swal.fire({
-        title: 'ยืนยันการลบ?',
-        text: "ต้องการลบโพสต์ประกาศข่าวสารนี้ใช่หรือไม่?",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#cbd5e1',
-        confirmButtonText: 'ลบประกาศ',
-        cancelButtonText: 'ยกเลิก'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            customNews.splice(index, 1);
-            localStorage.setItem('airwise_news', JSON.stringify(customNews));
-            renderNewsFeed();
-            Swal.fire({ icon: 'success', title: 'ลบสำเร็จ', text: 'ลบโพสต์ประกาศข่าวสารแล้ว', timer: 1500, showConfirmButton: false });
-        }
-    });
-}
-
-// 3. ฟังก์ชันเพิ่มรายชื่อผู้จัดทำ
-function saveAboutMember() {
-    const n = document.getElementById('member-input-name').value;
-    const r = document.getElementById('member-input-role').value;
-    const c = document.getElementById('member-input-class').value;
-    const img = document.getElementById('member-input-img').value;
-    
-    if(!n || !r) { 
-        Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบถ้วน', text: 'กรุณากรอกข้อมูลรายชื่อให้เรียบร้อย', confirmButtonColor: '#4f46e5' });
-        return; 
-    }
-
-    customMembers.push({ name: n, role: r, group: c, img: img });
-    localStorage.setItem('airwise_members', JSON.stringify(customMembers));
-    renderAboutCards();
-    closeAboutModal();
-    document.getElementById('member-input-name').value = '';
-    document.getElementById('member-input-role').value = '';
-    
-    Swal.fire({ icon: 'success', title: 'สำเร็จ', text: 'เพิ่มรายชื่อผู้จัดทำเรียบร้อยแล้ว', timer: 1500, showConfirmButton: false });
-}
-
-// 4. ฟังก์ชันลบรายชื่อผู้จัดทำ
-function deleteMemberCard(index) {
-    Swal.fire({
-        title: 'ยืนยันการลบ?',
-        text: "ต้องการลบข้อมูลคณะผู้จัดทำท่านนี้ออกใช่หรือไม่?",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#cbd5e1',
-        confirmButtonText: 'ลบข้อมูล',
-        cancelButtonText: 'ยกเลิก'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            customMembers.splice(index, 1);
-            localStorage.setItem('airwise_members', JSON.stringify(customMembers));
-            renderAboutCards();
-            Swal.fire({ icon: 'success', title: 'ลบสำเร็จ', text: 'ลบข้อมูลคณะผู้จัดทำออกแล้ว', timer: 1500, showConfirmButton: false });
-        }
-    });
-}
-
-// 5. ฟังก์ชันเข้าสู่ระบบแอดมิน
-function executeSystemAdminLogin() {
-    const userField = document.getElementById('input-admin-username').value;
-    const passField = document.getElementById('input-admin-password').value;
-
-    if(userField === 'admin' && passField === 'airwise2026') {
-        setLoginState(true, { email: 'admin@airwise.com', displayName: 'System Administrator Network' });
-        Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: 'ยินดีต้อนรับผู้ดูแลระบบ', timer: 1500, showConfirmButton: false });
-        
-        // ล้างช่องกรอกและสลับหน้าต่าง
-        document.getElementById('input-admin-username').value = '';
-        document.getElementById('input-admin-password').value = '';
-    } else {
-        Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: 'รหัสความปลอดภัยผู้ดูแลระบบไม่ถูกต้อง!', confirmButtonColor: '#ef4444' });
-    }
-}
-
-// 6. ฟังก์ชันเข้าสู่ระบบด้วยอีเมล
-function executeFirebaseEmailAuth(type) {
-    const email = document.getElementById('input-auth-email').value;
-    const pass = document.getElementById('input-auth-password').value;
-    
-    if(!email || !pass) { 
-        Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบถ้วน', text: 'กรุณากรอกข้อมูลบัญชีอีเมลและรหัสผ่าน', confirmButtonColor: '#3b82f6' });
-        return; 
-    }
-
-    if(!window.fbAuth) {
-        setLoginState(email === "admin@airwise.com", { email: email, displayName: email.split('@')[0] });
-        Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: 'เข้าสู่ระบบจำลอง (Local Mode) สำเร็จ', timer: 1500, showConfirmButton: false });
-        return;
-    }
-    
-    if(type === 'login') {
-        window.fbModules.signInWithEmailAndPassword(window.fbAuth, email, pass)
-            .then(() => { Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: 'ยินดีต้อนรับเข้าสู่ระบบ', timer: 1500, showConfirmButton: false }); })
-            .catch(err => Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบล้มเหลว', text: err.message, confirmButtonColor: '#ef4444' }));
-    } else {
-        window.fbModules.createUserWithEmailAndPassword(window.fbAuth, email, pass)
-            .then(() => Swal.fire({ icon: 'success', title: 'สมัครสมาชิกสำเร็จ', text: 'สมัครบัญชีผู้ใช้ใหม่บนระบบสำเร็จ', timer: 1500, showConfirmButton: false }))
-            .catch(err => Swal.fire({ icon: 'error', title: 'สมัครสมาชิกล้มเหลว', text: err.message, confirmButtonColor: '#ef4444' }));
-    }
-}
-
-// 7. ฟังก์ชันเข้าสู่ระบบด้วย Google
-function executeFirebaseGoogleAuth() {
-    if(!window.fbAuth) {
-        setLoginState(false, { email: 'guest.student@gmail.com', displayName: 'Nakhon Si Student Guest' });
-        Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: 'จำลองการเข้าสู่ระบบด้วย Google', timer: 1500, showConfirmButton: false });
-        return;
-    }
-    window.fbModules.signInWithPopup(window.fbAuth, window.googleProvider)
-        .then(() => { Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: 'เข้าสู่ระบบด้วยบัญชี Google สำเร็จ', timer: 1500, showConfirmButton: false }); })
-        .catch(err => Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message, confirmButtonColor: '#ef4444' }));
-}
-
-// 8. ฟังก์ชันออกจากระบบ
-function executeSignOut() {
-    if(window.fbAuth) {
-        window.fbModules.signOut(window.fbAuth);
-    }
-    setLoginState(false, null);
-    Swal.fire({ icon: 'info', title: 'ออกจากระบบ', text: 'ออกจากระบบเรียบร้อยแล้ว', timer: 1500, showConfirmButton: false });
-}
-        
     </script>
     <div id="modal-view-about" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 opacity-0 transition-opacity duration-300" style="transition: opacity 0.3s ease;">
         <div class="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl transform scale-95 transition-transform duration-300">
@@ -1707,39 +2148,47 @@ function executeSignOut() {
             </div>
         </div>
     </div>
-    <div id="cookie-banner" class="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.1)] z-[9999] transform translate-y-full transition-transform duration-500 ease-in-out px-4 py-4 md:py-5 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div class="flex items-start md:items-center space-x-4 max-w-7xl mx-auto w-full">
-            <div class="text-blue-500 text-3xl hidden sm:flex items-center justify-center bg-blue-50 p-3 rounded-full">
-                <i class="fas fa-cookie-bite"></i>
+    <!-- ====== Cookie Consent Banner (ปรับปรุงให้รองรับมือถือสวยงาม) ====== -->
+    <div id="cookie-banner" class="fixed bottom-0 left-0 w-full z-[9999] transform translate-y-full transition-transform duration-500 ease-out px-3 pb-3 md:px-6 md:pb-6 pointer-events-none">
+        <div class="max-w-3xl mx-auto bg-white/95 backdrop-blur-md border border-slate-200 shadow-[0_-8px_30px_-6px_rgba(15,23,42,0.18)] rounded-[1.75rem] md:rounded-3xl p-4 md:p-5 pointer-events-auto">
+            <div class="flex items-start gap-3 md:gap-4">
+                <div class="text-blue-600 text-lg shrink-0 flex items-center justify-center bg-blue-50 w-11 h-11 rounded-2xl">
+                    <i class="fas fa-cookie-bite"></i>
+                </div>
+                <div class="flex-grow min-w-0">
+                    <h4 class="text-slate-900 font-extrabold text-sm">เว็บไซต์นี้ใช้คุกกี้ (Cookies)</h4>
+                    <p class="text-slate-500 text-[11px] md:text-xs mt-1 leading-relaxed">
+                        เราใช้คุกกี้เพื่อมอบประสบการณ์การใช้งานที่ดีที่สุดบนเว็บไซต์ของเรา การคลิก "ยอมรับทั้งหมด" ถือว่าคุณยินยอมให้เราใช้คุกกี้ตามนโยบายความเป็นส่วนตัว
+                    </p>
+                </div>
+                <button onclick="dismissCookieBanner(false)" class="shrink-0 w-7 h-7 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition flex items-center justify-center"><i class="fas fa-xmark text-xs"></i></button>
             </div>
-            <div class="flex-grow">
-                <h4 class="text-slate-900 font-extrabold text-sm md:text-base">เว็บไซต์นี้ใช้คุกกี้ (Cookies)</h4>
-                <p class="text-slate-500 text-xs md:text-sm mt-1 leading-relaxed">
-                    เราใช้คุกกี้เพื่อมอบประสบการณ์การใช้งานที่ดีที่สุดบนเว็บไซต์ของเรา คุณสามารถอ่านรายละเอียดเพิ่มเติมได้ที่นโยบายความเป็นส่วนตัว การคลิก "ยอมรับทั้งหมด" ถือว่าคุณยินยอมให้เราใช้คุกกี้
-                </p>
-            </div>
-            <div class="flex flex-row space-x-3 w-full md:w-auto shrink-0 justify-end pt-2 md:pt-0">
-                <button onclick="acceptCookies()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-xs md:text-sm shadow-md shadow-blue-500/30 transition-all w-full md:w-auto uppercase tracking-wider">
-                    ยอมรับคุกกี้ทั้งหมด
+            <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 mt-4">
+                <button onclick="dismissCookieBanner(false)" class="w-full sm:w-auto bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-bold text-[11px] md:text-xs hover:bg-slate-200 transition-all uppercase tracking-wider">
+                    ปฏิเสธ
+                </button>
+                <button onclick="dismissCookieBanner(true)" class="w-full sm:flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold text-[11px] md:text-xs shadow-md shadow-blue-500/30 transition-all uppercase tracking-wider">
+                    <i class="fas fa-check mr-1.5"></i>ยอมรับคุกกี้ทั้งหมด
                 </button>
             </div>
         </div>
     </div>
     <script>
-        // ฟังก์ชันจัดการ Cookie Banner
-        function acceptCookies() {
-            // บันทึกค่าลงใน Local Storage ของบราวเซอร์เพื่อจำว่าผู้ใช้เคยกดปุ่มแล้ว
-            localStorage.setItem('airwise_cookie_accepted', 'true');
-            
+        // ฟังก์ชันจัดการ Cookie Banner — accepted=true (ยอมรับ) / false (ปฏิเสธ/ปิด)
+        function dismissCookieBanner(accepted) {
+            localStorage.setItem('airwise_cookie_accepted', accepted ? 'true' : 'false');
+
             // ทำให้แถบเลื่อนลงไปด้านล่างอย่างนุ่มนวล
             const banner = document.getElementById('cookie-banner');
             banner.classList.add('translate-y-full');
-            
+
             // ซ่อน element หลังจากอนิเมชันเลื่อนลงทำงานจบ
-            setTimeout(() => { 
-                banner.style.display = 'none'; 
+            setTimeout(() => {
+                banner.style.display = 'none';
             }, 500);
         }
+        // คงชื่อฟังก์ชันเดิมไว้เผื่อมีการอ้างอิงที่อื่น (alias)
+        function acceptCookies() { dismissCookieBanner(true); }
 
         // ตรวจสอบสถานะเมื่อโหลดหน้าเว็บเสร็จสิ้น
         window.addEventListener('DOMContentLoaded', () => {
@@ -1753,170 +2202,159 @@ function executeSignOut() {
         });
     </script>
     <script>
-    // ฟังก์ชันเปิด-ปิด เมนูมือถือ
+    // ฟังก์ชันเปิด-ปิด เมนูมือถือ (Bottom Sheet พร้อมแอนิเมชัน)
     function toggleMobileMenu() {
         const menu = document.getElementById('mobile-menu-dropdown');
-        menu.classList.toggle('hidden');
+        const backdrop = document.getElementById('mobile-menu-backdrop');
+        const isOpening = menu.classList.contains('hidden');
+
+        if (isOpening) {
+            // เปิดเมนู: แสดง backdrop และเลื่อนแผ่นเมนูขึ้นมา
+            backdrop.classList.remove('hidden');
+            menu.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                backdrop.classList.remove('opacity-0');
+                menu.classList.remove('translate-y-full');
+            });
+        } else {
+            // ปิดเมนู: เลื่อนแผ่นเมนูลงและจางหาย ก่อนซ่อนจริง
+            backdrop.classList.add('opacity-0');
+            menu.classList.add('translate-y-full');
+            document.body.style.overflow = '';
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+                menu.classList.add('hidden');
+            }, 300);
+        }
     }
     // -------------------------------------------------------------
-// [ระบบดึงข้อมูล API ฝุ่น PM 2.5 จริง เพื่อแทนที่ค่า 15]
-// -------------------------------------------------------------
-// =======================================================
-// [ระบบดึงข้อมูลจริงจาก API]
-// =======================================================
-async function fetchRealtimeAirQuality() {
-    try {
-        const lats = districtsData.map(d => d.lat).join(',');
-        const lngs = districtsData.map(d => d.lng).join(',');
-        const apiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lngs}&current=pm2_5`;
-        
-        const response = await fetch(apiUrl);
-        if (!response.ok) throw new Error("API Network Error");
-        const apiData = await response.json();
+    // [ระบบดึงข้อมูล API ฝุ่น PM2.5 จริงจาก Open-Meteo ครบทั้ง 23 อำเภอ]
+    // เอกสาร: https://open-meteo.com/en/docs/air-quality-api
+    // -------------------------------------------------------------
+    async function fetchRealtimeAirQuality() {
+        try {
+            const lats = districtsData.map(d => d.lat).join(',');
+            const lngs = districtsData.map(d => d.lng).join(',');
+            const apiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lngs}&current=pm2_5&timezone=auto`;
 
-        if (Array.isArray(apiData)) { 
-            apiData.forEach((data, index) => {
-                if (data.current && data.current.pm2_5 !== undefined) {
-                    // เขียนทับเลข 15 ด้วยข้อมูลจริงจากดาวเทียม
-                    districtsData[index].pm25 = Math.round(data.current.pm2_5);
+            // ตั้ง timeout กันกรณีเครือข่ายช้าหรือ API ไม่ตอบสนอง
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+            const response = await fetch(apiUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`API Network Error: ${response.status}`);
+            const apiData = await response.json();
+
+            // เมื่อขอหลายพิกัดพร้อมกัน Open-Meteo จะตอบกลับเป็น Array หนึ่งรายการต่อหนึ่งอำเภอ
+            const resultList = Array.isArray(apiData) ? apiData : [apiData];
+            let updatedCount = 0;
+
+            resultList.forEach((data, index) => {
+                if (data && data.current && typeof data.current.pm2_5 === 'number' && !isNaN(data.current.pm2_5)) {
+                    districtsData[index].pm25 = Math.max(0, Math.round(data.current.pm2_5));
+                    updatedCount++;
                 }
             });
-            
-            // 1. สั่งอัปเดตหน้าจอและตาราง
-            if (typeof updateDashboardUI === 'function') updateDashboardUI();
-            if (typeof renderDashboardWidgets === 'function') renderDashboardWidgets();
-            if (typeof renderAirQualityTable === 'function') renderAirQualityTable();
-            
-            // 2. [สำคัญ] สั่งอัปเดตแผนที่ด้วยฟังก์ชันดั้งเดิมของคุณ!
-            if (typeof renderMapMarkers === 'function') {
-                renderMapMarkers(); // ฟังก์ชันนี้ในโค้ดของคุณมีคำสั่ง markerGroup.clearLayers() อยู่แล้ว มันจะลบอันเก่าและวาดใหม่ให้อัตโนมัติ
+
+            if (updatedCount === 0) throw new Error("API ตอบกลับมาแต่ไม่มีค่า PM2.5 ที่ใช้งานได้");
+
+            // 1. อัปเดต Dashboard, ตาราง และหน้ารายละเอียด (ถ้าเปิดอยู่)
+            renderDashboardWidgets();
+            renderAirQualityTable();
+            if (currentlySelectedDistrictIndex !== null) {
+                const targetDistrict = districtsData[currentlySelectedDistrictIndex];
+                const assess = evaluatePm25Tier(targetDistrict.pm25);
+                document.getElementById('detail-pm-display').innerText = targetDistrict.pm25;
+                document.getElementById('detail-status-pill').innerText = currentLang === 'th' ? assess.tierTh : assess.tierEn;
+                document.getElementById('detail-status-pill').style.backgroundColor = assess.hexColor;
+                document.getElementById('detail-accent-bar').style.backgroundColor = assess.hexColor;
+                document.getElementById('detail-gauge-frame').style.borderColor = assess.hexColor;
+                document.getElementById('detail-rec-text').innerText = currentLang === 'th' ? assess.adviceTh : assess.adviceEn;
             }
-            
-            console.log("🟢 ข้อมูลบนแผนที่อัปเดตเป็นของจริงเรียบร้อยแล้ว!");
+
+            // 2. อัปเดตหมุดบนแผนที่ทั้งสองตัว (หน้าแรก + หน้าแผนที่เต็ม)
+            renderAllMapMarkers();
+
+            // 3. อัปเดตสถานะแสดงเวลาล่าสุดที่ดึงข้อมูลสำเร็จ
+            const statusEl = document.getElementById('pm25-source-status');
+            if (statusEl) {
+                const now = new Date();
+                statusEl.innerHTML = `<i class="fas fa-circle text-emerald-500 text-[6px] mr-1.5 align-middle"></i>${currentLang === 'th' ? 'ข้อมูลจริงจาก Open-Meteo อัปเดตล่าสุด' : 'Live data from Open-Meteo, updated'} ${now.toLocaleTimeString(currentLang === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit' })}`;
+            }
+
+            console.log(`🟢 อัปเดตค่า PM2.5 จริงสำเร็จ ${updatedCount}/${districtsData.length} อำเภอ`);
+        } catch (error) {
+            console.warn("🔴 ไม่สามารถดึงข้อมูล PM2.5 จาก API ได้:", error);
+            const statusEl = document.getElementById('pm25-source-status');
+            if (statusEl) {
+                statusEl.innerHTML = `<i class="fas fa-circle text-amber-500 text-[6px] mr-1.5 align-middle"></i>${currentLang === 'th' ? 'ใช้ข้อมูลสำรอง (เชื่อมต่อ API ไม่สำเร็จ)' : 'Using fallback data (API unreachable)'}`;
+            }
         }
-    } catch (error) {
-        console.warn("🔴 ไม่สามารถดึง API ได้:", error);
-    }
-}
-
-
-// สั่งให้ระบบทำงานทันทีเมื่อโหลดหน้าเว็บเสร็จ
-window.addEventListener('DOMContentLoaded', () => {
-    // หน่วงเวลา 1 วินาที ให้ระบบสร้างหน้าจอด้วยค่า 15 ไปก่อน (กันหน้าจอขาว) แล้วค่อยเอาของจริงมาทับ
-    setTimeout(() => {
-        fetchRealtimeAirQuality();
-    }, 1000);
-
-    // สั่งให้อัปเดตข้อมูลใหม่ทุกๆ 15 นาที
-    setInterval(fetchRealtimeAirQuality, 900000);
-});
-
-// ฟังก์ชันอัปเดตหมุดบนแผนที่หลักของคุณ
-function updateMapAfterFetch() {
-    if (typeof mainMapInstance !== 'undefined' && mainMapInstance) {
-        // ลบหมุดเก่า
-        if (typeof mainMapMarkersArray !== 'undefined') {
-            mainMapMarkersArray.forEach(m => mainMapInstance.removeLayer(m));
-            mainMapMarkersArray = [];
-        }
-
-        // วาดหมุดใหม่
-        districtsData.forEach(d => {
-            // ประเมินสีตามค่า PM2.5 (ฟังก์ชันเดิมของคุณ)
-            const color = (d.pm25 > 50) ? '#EF4444' : (d.pm25 > 37) ? '#F97316' : (d.pm25 > 25) ? '#FBBF24' : '#10B981';
-            
-            const marker = L.circleMarker([d.lat, d.lng], {
-                radius: 10,
-                fillColor: color,
-                color: '#fff',
-                weight: 2,
-                fillOpacity: 0.8
-            })
-            .bindPopup(`<b>${d.th}</b><br>PM2.5: ${d.pm25} µg/m³`)
-            .addTo(mainMapInstance);
-            
-            mainMapMarkersArray.push(marker);
-        });
-    }
-}
-
-// ฟังก์ชันสำหรับลบหมุดเดิมและวาดหมุดใหม่บนแผนที่
-// ฟังก์ชันสำหรับวาดหมุดแผนที่ใหม่ (ลบของเดิมแล้ววาดใหม่ตามข้อมูลจริง)
-function updateRealtimeMapMarkers() {
-    if (!mainMapInstance) return;
-
-    // 1. เปลี่ยนสไตล์ของตัวแผนที่ (Base Map) ให้ดูคลีนและมีสีสันสวยงามขึ้น
-    // (ถ้ามีคำสั่ง L.tileLayer เดิมอยู่ ให้ใช้ตัวนี้ทับไปเลยครับ)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
-    }).addTo(mainMapInstance);
-
-    // 2. ลบหมุดเดิมทั้งหมดออกจากแผนที่ (เพื่อไม่ให้ซ้อนกัน)
-    if (typeof mainMapMarkersArray !== 'undefined') {
-        mainMapMarkersArray.forEach(marker => mainMapInstance.removeLayer(marker));
-        mainMapMarkersArray = []; 
     }
 
-    // 3. วาดหมุดใหม่พร้อมสีตามค่าฝุ่น
-    districtsData.forEach((district) => {
-        // ประเมินสีตามเกณฑ์คุณภาพอากาศ
-        let bgColor = "#10B981"; // สีเขียว (ดีมาก)
-        if (district.pm25 > 25) bgColor = "#FBBF24"; // สีเหลือง (ปานกลาง)
-        if (district.pm25 > 37) bgColor = "#F97316"; // สีส้ม (เริ่มมีผลกระทบ)
-        if (district.pm25 > 50) bgColor = "#EF4444"; // สีแดง (มีผลกระทบ)
+    // สั่งให้ระบบทำงานทันทีเมื่อโหลดหน้าเว็บเสร็จ
+    window.addEventListener('DOMContentLoaded', () => {
+        // หน่วงเวลาเล็กน้อยให้แผนที่/ตารางสร้างด้วยค่าเริ่มต้นก่อน (กันหน้าจอขาว) แล้วค่อยเอาของจริงมาทับ
+        setTimeout(() => {
+            fetchRealtimeAirQuality();
+        }, 1200);
 
-        // สร้างหมุดแบบมีตัวเลขอยู่ตรงกลาง
-        const customIcon = L.divIcon({
-            html: `
-                <div style="background-color: ${bgColor}; color: white; border: 3px solid white; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                    ${district.pm25}
-                </div>
-            `,
-            className: '',
-            iconSize: [38, 38],
-            iconAnchor: [19, 19],
-            popupAnchor: [0, -19]
-        });
-
-        // นำหมุดไปวางบนแผนที่
-        const marker = L.marker([district.lat, district.lng], { icon: customIcon })
-            .bindPopup(`
-                <div style="text-align: center; font-family: 'Inter', 'Sarabun', sans-serif; min-width: 120px;">
-                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #334155;">${district.th}</div>
-                    <div style="font-size: 12px; color: #64748b;">ค่าฝุ่น PM2.5</div>
-                    <div style="color: ${bgColor}; font-size: 20px; font-weight: 900;">${district.pm25} <span style="font-size: 12px; color: #94a3b8;">µg/m³</span></div>
-                </div>
-            `)
-            .addTo(mainMapInstance);
-            
-        mainMapMarkersArray.push(marker);
+        // สั่งให้อัปเดตข้อมูลใหม่ทุกๆ 15 นาที
+        setInterval(fetchRealtimeAirQuality, 900000);
     });
-}
-// -------------------------------------------------------------
-    // ระบบเชื่อม API สภาพอากาศจริง จ.นครศรีธรรมราช (ไม่กระทบโค้ดส่วนอื่น)
+
     // -------------------------------------------------------------
-    function fetchRealWeather() {
-        // ดึงข้อมูลสภาพอากาศจริงจากพิกัดใจกลางนครศรีธรรมราช (ไม่ต้องใช้ API Key)
-        fetch('https://api.open-meteo.com/v1/forecast?latitude=8.4304&longitude=99.9631&current=temperature_2m,relative_humidity_2m,wind_speed_10m')
-            .then(response => response.json())
-            .then(data => {
-                // ดึงค่าตัวเลขจาก API
-                const temp = Math.round(data.current.temperature_2m);
-                const humid = Math.round(data.current.relative_humidity_2m);
-                const wind = Math.round(data.current.wind_speed_10m);
+    // ระบบเชื่อม Weather API จริง จ.นครศรีธรรมราช (Open-Meteo Forecast API)
+    // เอกสาร: https://open-meteo.com/en/docs
+    // -------------------------------------------------------------
+    async function fetchRealWeather() {
+        const tempEl = document.getElementById('real-temp');
+        const humidEl = document.getElementById('real-humid');
+        const windEl = document.getElementById('real-wind');
+        const iconEl = document.getElementById('real-weather-icon');
 
-                // ส่งตัวเลขไปทับในหน้า HTML ตาม ID ที่ตั้งไว้ (ยังคงดีไซน์เดิมเป๊ะ)
-                const tempEl = document.getElementById('real-temp');
-                const humidEl = document.getElementById('real-humid');
-                const windEl = document.getElementById('real-wind');
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-                if (tempEl) tempEl.innerText = temp + " °C";
-                if (humidEl) humidEl.innerText = humid + " %";
-                if (windEl) windEl.innerText = wind + " km/h";
-            })
-            .catch(error => {
-                console.log("ไม่สามารถดึงข้อมูลสภาพอากาศได้:", error);
-            });
+            const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=8.4304&longitude=99.9631&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto', { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`Weather API Error: ${response.status}`);
+            const data = await response.json();
+            if (!data.current) throw new Error("ไม่มีข้อมูล current ในผลลัพธ์");
+
+            const temp = Math.round(data.current.temperature_2m);
+            const humid = Math.round(data.current.relative_humidity_2m);
+            const wind = Math.round(data.current.wind_speed_10m);
+            const code = data.current.weather_code;
+
+            if (tempEl) tempEl.innerText = temp + " °C";
+            if (humidEl) humidEl.innerText = humid + "%";
+            if (windEl) windEl.innerText = wind + " km/h";
+
+            // ปรับไอคอนตามรหัสสภาพอากาศ (WMO Weather Code)
+            if (iconEl) {
+                let iconClass = "fa-cloud-sun-rain"; // ค่าเริ่มต้น
+                if (code === 0) iconClass = "fa-sun";
+                else if (code <= 2) iconClass = "fa-cloud-sun";
+                else if (code === 3) iconClass = "fa-cloud";
+                else if (code <= 48) iconClass = "fa-smog";
+                else if (code <= 67) iconClass = "fa-cloud-rain";
+                else if (code <= 77) iconClass = "fa-snowflake";
+                else if (code <= 82) iconClass = "fa-cloud-showers-heavy";
+                else if (code <= 99) iconClass = "fa-cloud-bolt";
+                iconEl.className = `fas ${iconClass} absolute -right-2 -bottom-2 text-5xl text-slate-800 opacity-40`;
+            }
+        } catch (error) {
+            console.warn("🔴 ไม่สามารถดึงข้อมูลสภาพอากาศได้:", error);
+            if (tempEl && tempEl.innerText === '-- °C') tempEl.innerText = "N/A";
+            if (humidEl && humidEl.innerText === '--') humidEl.innerText = "N/A";
+            if (windEl && windEl.innerText === '--') windEl.innerText = "N/A";
+        }
     }
 
     // สั่งให้ระบบดึงข้อมูลสภาพอากาศทันทีเมื่อเปิดเว็บ
@@ -1925,6 +2363,120 @@ function updateRealtimeMapMarkers() {
     // ตั้งเวลาให้อัปเดตสภาพอากาศอัตโนมัติทุกๆ 30 นาที (1800000 มิลลิวินาที)
     setInterval(fetchRealWeather, 1800000);
 
+</script>
+
+
+<!-- ====== Image Crop Modal (ใช้ร่วมทุกช่อง) ====== -->
+<div id="crop-modal" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-[10000] justify-center items-center p-3 md:p-6">
+    <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col" style="max-height:92vh">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-4 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-crop-simple text-white"></i>
+                </div>
+                <div>
+                    <div class="text-white font-extrabold text-sm">ครอปรูปภาพ</div>
+                    <div id="crop-mode-label" class="text-slate-400 text-[10px] font-medium"></div>
+                </div>
+            </div>
+            <button onclick="closeCropModal()" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
+                <i class="fas fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Canvas Area -->
+        <div class="flex-1 overflow-auto bg-slate-100 flex items-center justify-center p-3" style="min-height:200px">
+            <div class="relative inline-block select-none" style="line-height:0">
+                <canvas id="crop-canvas" class="block rounded-xl shadow-lg" style="cursor:move; max-width:100%; touch-action:none;"></canvas>
+            </div>
+        </div>
+
+        <!-- Instructions + Buttons -->
+        <div class="px-5 py-4 border-t border-slate-100 bg-white shrink-0">
+            <div class="text-[10px] text-slate-400 font-medium mb-3 flex items-center gap-1.5">
+                <i class="fas fa-circle-info text-blue-400"></i>
+                ลากกล่องเพื่อเลื่อน · ลากมุมเพื่อปรับขนาด (อัตราส่วนล็อกอัตโนมัติ)
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeCropModal()" class="px-5 py-2.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200 transition">
+                    ยกเลิก
+                </button>
+                <button onclick="applyCrop()" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-300/40 transition flex items-center gap-2">
+                    <i class="fas fa-check"></i> ใช้รูปนี้
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== Contact Widget ลอยมุมขวาล่าง (ข้อ 9) ====== -->
+<div id="contact-widget" class="fixed bottom-5 right-4 z-[990] flex flex-col items-end gap-2 transition-all duration-300">
+    <!-- Card ข้อมูลติดต่อ (ย่อ/ขยายได้) -->
+    <div id="contact-card" class="hidden bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl shadow-slate-900/15 overflow-hidden w-64 transition-all duration-300 origin-bottom-right">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-wind text-white text-sm"></i>
+                </div>
+                <span class="text-white font-extrabold text-sm tracking-tight">ติดต่อ AIRWISE</span>
+            </div>
+            <button onclick="toggleContactCard()" class="text-white/80 hover:text-white transition w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/20">
+                <i class="fas fa-xmark text-xs"></i>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="p-4 space-y-3">
+            <p class="text-[11px] text-slate-500 font-medium leading-relaxed">โครงงาน AIRWISE พัฒนาโดยนักเรียนโรงเรียนเตรียมอุดมศึกษาภาคใต้ ติดต่อเราผ่านช่องทางด้านล่าง</p>
+            <!-- Facebook -->
+            <a href="https://www.facebook.com/triamudomsouth/?locale=th_TH" target="_blank" rel="noopener noreferrer"
+               class="flex items-center gap-3 p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-all group">
+                <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+                    <i class="fab fa-facebook-f text-white text-sm"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Facebook Page</div>
+                    <div class="text-xs font-bold text-blue-700 truncate max-w-[140px]">ทรม. ภาคใต้ (Official)</div>
+                </div>
+                <i class="fas fa-arrow-up-right-from-square text-blue-400 text-[10px] ml-auto shrink-0"></i>
+            </a>
+            <!-- Instagram -->
+            <a href="https://www.instagram.com/tus_breathsafe?igsh=MWp1dXlqeHhpMHgwZw==" target="_blank" rel="noopener noreferrer"
+               class="flex items-center gap-3 p-3 rounded-2xl bg-pink-50 hover:bg-pink-100 transition-all group">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform" style="background: linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)">
+                    <i class="fab fa-instagram text-white text-sm"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Instagram</div>
+                    <div class="text-xs font-bold text-pink-700">@tus_breathsafe</div>
+                </div>
+                <i class="fas fa-arrow-up-right-from-square text-pink-400 text-[10px] ml-auto shrink-0"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- ปุ่มลอย FAB -->
+    <button id="contact-fab" onclick="toggleContactCard()"
+        class="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl shadow-xl shadow-blue-500/40 flex items-center justify-center transition-all active:scale-95 hover:scale-105"
+        title="ติดต่อเรา">
+        <i id="contact-fab-icon" class="fas fa-headset text-xl"></i>
+    </button>
+</div>
+
+<script>
+    function toggleContactCard() {
+        const card = document.getElementById('contact-card');
+        const icon = document.getElementById('contact-fab-icon');
+        const isOpen = !card.classList.contains('hidden');
+        if (isOpen) {
+            card.classList.add('hidden');
+            icon.className = 'fas fa-headset text-xl';
+        } else {
+            card.classList.remove('hidden');
+            icon.className = 'fas fa-xmark text-xl';
+        }
+    }
 </script>
 </body>
 </html>
