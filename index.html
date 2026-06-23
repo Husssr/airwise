@@ -18,7 +18,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
         // คีย์เชื่อมต่อฐานข้อมูล Google Firebase
         const firebaseConfig = {
@@ -30,21 +29,18 @@
             appId: "1:104485361484:web:c3a931f5f6e0a0499861e9"
         };
 
-        let app, auth, db, storage, googleProvider;
+        let app, auth, db, googleProvider;
         if(firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY_HERE") {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            storage = getStorage(app);
             googleProvider = new GoogleAuthProvider();
 
             window.fbAuth = auth;
             window.fbDb = db;
-            window.fbStorage = storage;
             window.googleProvider = googleProvider;
             window.fbModules = {
                 collection, addDoc, getDocs, deleteDoc, doc, updateDoc, setDoc, getDoc, onSnapshot,
-                ref, uploadString, getDownloadURL, deleteObject,
                 createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signOut
             };
 
@@ -1612,7 +1608,55 @@ const districtIssuesData = {
 
         // --- 9.2 ระบบจัดการภาพหน้าปก (Hero Section) ---
         // ------------------------------------------------------------------
-        // Helper: แสดงรูปหน้าปกจาก URL (ใช้ได้ทั้งจาก Firebase Storage URL และ Base64)
+        // ImgBB Image Upload API
+        // docs: https://api.imgbb.com/
+        // ------------------------------------------------------------------
+        const IMGBB_API_KEY = 'a13d292b031ea791491a918a2d48ebdf08ab1f870abfa333db5ca2e7aad98f68';
+
+        // แปลง base64 data URL เป็น base64 string ล้วนๆ (ตัด "data:image/jpeg;base64," ออก)
+        function stripBase64Header(dataUrl) {
+            return dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        }
+
+        // อัปโหลดรูปไป ImgBB — คืนค่า display URL พร้อมใช้ใน <img src>
+        // name = ชื่อไฟล์ที่จะแสดงใน ImgBB album (เช่น "hero_cover", "news_1717000000")
+        async function uploadImageToStorage(base64DataUrl, storagePath) {
+            // storagePath ใช้เป็น image name ใน ImgBB (เปลี่ยน / → _)
+            const imageName = storagePath.replace(/\//g, '_').replace(/\.jpg$/i, '');
+
+            const formData = new FormData();
+            formData.append('key', IMGBB_API_KEY);
+            formData.append('image', stripBase64Header(base64DataUrl));
+            formData.append('name', imageName);
+
+            const controller = new AbortController();
+            const timeoutId  = setTimeout(() => controller.abort(), 30000);
+
+            const res = await fetch('https://api.imgbb.com/1/image', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) throw new Error(`ImgBB HTTP error: ${res.status}`);
+
+            const json = await res.json();
+            if (!json.success) throw new Error(`ImgBB upload failed: ${json.error?.message || 'unknown error'}`);
+
+            // คืน display_url (direct image link ใช้ใน <img> ได้ทันที)
+            return json.data.display_url;
+        }
+
+        // ImgBB ฟรีไม่มี delete API — เก็บ function ไว้เพื่อ compatibility แต่ไม่ทำอะไร
+        async function deleteImageFromStorage(imageUrl) {
+            // ImgBB free tier ไม่รองรับ delete ผ่าน API
+            // รูปเก่าจะยังอยู่ใน ImgBB แต่ Firestore จะชี้ไปรูปใหม่แทน
+            console.info('deleteImageFromStorage: ImgBB ไม่รองรับ delete ผ่าน API (free tier)');
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: แสดงรูปหน้าปกจาก URL
         // ------------------------------------------------------------------
         function renderHeroCoverFromUrl(url) {
             if (!url) return;
@@ -1621,40 +1665,6 @@ const districtIssuesData = {
         }
         function renderHeroCover() {
             renderHeroCoverFromUrl(localStorage.getItem('breathsafe_hero'));
-        }
-
-        // ------------------------------------------------------------------
-        // Helper: อัปโหลด Base64 รูปภาพที่ crop แล้วไป Firebase Storage
-        // คืนค่า public download URL พร้อมใช้งาน
-        // path ตัวอย่าง: "hero/cover.jpg", "news/1717000000.jpg", "about/member_1717000000.jpg"
-        // ------------------------------------------------------------------
-        async function uploadImageToStorage(base64DataUrl, storagePath) {
-            if (!window.fbStorage || !window.fbModules) {
-                // Fallback: ถ้าไม่มี Firebase ให้คืน Base64 เดิม (offline mode)
-                return base64DataUrl;
-            }
-            const storageRef = window.fbModules.ref(window.fbStorage, storagePath);
-            // uploadString รองรับ data_url format โดยตรง
-            await window.fbModules.uploadString(storageRef, base64DataUrl, 'data_url');
-            const downloadUrl = await window.fbModules.getDownloadURL(storageRef);
-            return downloadUrl;
-        }
-
-        // Helper: ลบรูปเก่าออกจาก Storage (เรียกก่อนอัปโหลดรูปใหม่ทับ)
-        async function deleteImageFromStorage(imageUrl) {
-            if (!window.fbStorage || !window.fbModules || !imageUrl) return;
-            try {
-                // ดึง path จาก Firebase Storage URL
-                const urlObj = new URL(imageUrl);
-                const encodedPath = urlObj.pathname.split('/o/')[1]?.split('?')[0];
-                if (!encodedPath) return;
-                const filePath = decodeURIComponent(encodedPath);
-                const oldRef = window.fbModules.ref(window.fbStorage, filePath);
-                await window.fbModules.deleteObject(oldRef);
-            } catch (e) {
-                // ไม่ต้องหยุดถ้าลบเก่าไม่ได้ (อาจถูกลบแล้ว)
-                console.warn('deleteImageFromStorage warning:', e.message);
-            }
         }
         window.openHeroModal = () => {
             const existing = localStorage.getItem('breathsafe_hero');
