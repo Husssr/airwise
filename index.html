@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BREATHSAFE</title>
+    <title>BREATHSAFE - ระบบรายงานคุณภาพอากาศและภูมิสารสนเทศ นครศรีธรรมราช</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -17,35 +17,75 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
-        // คีย์เชื่อมต่อฐานข้อมูล Google Firebase สำหรับโปรเจกต์ของคุณ (หากสมัครแล้วให้นำมาวางตรงนี้)
+        // คีย์เชื่อมต่อฐานข้อมูล Google Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyCKdLVy7fcWRcAW72zrtR6H1oIrJoPFsQQ",
-            authDomain: "airwise-project-d3556.firebaseapp.com",
-            projectId: "airwise-project-d3556",
-            storageBucket: "airwise-project-d3556.firebasestorage.app",
+            authDomain: "breathsafe-project-d3556.firebaseapp.com",
+            projectId: "breathsafe-project-d3556",
+            storageBucket: "breathsafe-project-d3556.firebasestorage.app",
             messagingSenderId: "104485361484",
             appId: "1:104485361484:web:c3a931f5f6e0a0499861e9"
         };
 
-        // ตรวจสอบความถูกต้องและป้องกันข้อผิดพลาดกรณีที่คีย์ยังเป็นค่าว่างเพื่อให้ระบบทำงาน Local Storage ทดแทนได้
-        let app, auth, db, googleProvider;
+        let app, auth, db, storage, googleProvider;
         if(firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY_HERE") {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            storage = getStorage(app);
             googleProvider = new GoogleAuthProvider();
-            
-            // ส่งค่าไปยัง Global Window Object เพื่อให้สคริปต์ในตัวเว็บเรียกใช้งานได้
-            window.fbAuth = auth; window.fbDb = db; window.googleProvider = googleProvider;
-            window.fbModules = { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signOut };
-            
+
+            window.fbAuth = auth;
+            window.fbDb = db;
+            window.fbStorage = storage;
+            window.googleProvider = googleProvider;
+            window.fbModules = {
+                collection, addDoc, getDocs, deleteDoc, doc, updateDoc, setDoc, getDoc, onSnapshot,
+                ref, uploadString, getDownloadURL, deleteObject,
+                createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signOut
+            };
+
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    const isSystemAdmin = user.email === "admin@airwise.com"; 
+                    const isSystemAdmin = user.email === "admin@breathsafe.app";
                     setLoginState(isSystemAdmin, user);
                 }
+            });
+
+            // ============================================================
+            // Realtime Listeners — ทุกคนเห็นข้อมูลพร้อมกันทันทีผ่าน Firestore
+            // ============================================================
+
+            // 1) Hero cover
+            onSnapshot(doc(db, 'siteConfig', 'heroCover'), (snap) => {
+                if (snap.exists()) {
+                    const url = snap.data().imageUrl;
+                    if (url) {
+                        localStorage.setItem('breathsafe_hero', url);
+                        renderHeroCoverFromUrl(url);
+                    }
+                }
+            });
+
+            // 2) News — เรียงตาม timestamp ล่าสุดขึ้นก่อน
+            onSnapshot(collection(db, 'news'), (snap) => {
+                const newsList = snap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                localStorage.setItem('breathsafe_news', JSON.stringify(newsList));
+                if (typeof renderNewsCards === 'function') renderNewsCards();
+            });
+
+            // 3) About Members — เรียงตาม order
+            onSnapshot(collection(db, 'aboutMembers'), (snap) => {
+                const members = snap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => (a.order || 0) - (b.order || 0));
+                localStorage.setItem('breathsafe_about', JSON.stringify(members));
+                if (typeof renderAboutCards === 'function') renderAboutCards();
             });
         }
     </script>
@@ -57,6 +97,30 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-track { background-color: transparent; }
+
+        /* ===== 3D Character idle animations ===== */
+        @keyframes charFloat {
+            0%, 100% { transform: translateY(0px); }
+            50%       { transform: translateY(-7px); }
+        }
+        @keyframes charBlink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            94%           { transform: scaleY(0.05); }
+        }
+        @keyframes charBobHead {
+            0%, 100% { transform: rotate(0deg); }
+            25%       { transform: rotate(2deg); }
+            75%       { transform: rotate(-2deg); }
+        }
+        #char-svg {
+            animation: charFloat 3.2s ease-in-out infinite;
+            transform-origin: bottom center;
+        }
+        /* กระพริบตาอัตโนมัติ — ใช้ CSS กับ group ตาทั้งคู่ผ่าน transform */
+        #char-svg .eye-group {
+            animation: charBlink 4s ease-in-out infinite;
+            transform-origin: center 55px;
+        }
         
         /* สปินเนอร์ตอนกำลังประมวลผลเปลี่ยนผ่านหน้าจอ */
         .loader-ring {
@@ -375,77 +439,198 @@
                 
                 <!-- ====== Character Speech Widget (ข้อ 5) ====== -->
                 <div id="speech-character-panel" class="pt-2">
-                    <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl p-5 max-w-xl mx-auto relative overflow-hidden">
-                        <!-- ตัวการ์ตูนน่ารัก (SVG inline) -->
-                        <div class="flex items-end justify-center gap-4 mb-4">
-                            <!-- ตัวการ์ตูน -->
-                            <div class="relative shrink-0">
-                                <svg id="char-svg" width="90" height="110" viewBox="0 0 90 110" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-md">
-                                    <!-- ตัว -->
-                                    <ellipse cx="45" cy="90" rx="28" ry="18" fill="#FDE68A"/>
-                                    <!-- เสื้อ -->
-                                    <rect x="21" y="75" width="48" height="22" rx="12" fill="#60A5FA"/>
-                                    <!-- ริบบิ้น/ผ้ากันเปื้อน -->
-                                    <rect x="35" y="80" width="20" height="14" rx="5" fill="#F9A8D4"/>
-                                    <!-- หัว -->
-                                    <ellipse cx="45" cy="45" rx="28" ry="26" fill="#FBBF24"/>
-                                    <!-- ผม -->
-                                    <ellipse cx="45" cy="22" rx="22" ry="10" fill="#92400E"/>
-                                    <!-- ไว้ผมรอบด้านซ้าย -->
-                                    <ellipse cx="20" cy="32" rx="8" ry="12" fill="#92400E"/>
-                                    <!-- ไว้ผมรอบด้านขวา -->
-                                    <ellipse cx="70" cy="32" rx="8" ry="12" fill="#92400E"/>
-                                    <!-- หูซ้าย -->
-                                    <ellipse cx="18" cy="45" rx="5" ry="7" fill="#FBBF24"/>
-                                    <!-- หูขวา -->
-                                    <ellipse cx="72" cy="45" rx="5" ry="7" fill="#FBBF24"/>
-                                    <!-- ตาซ้าย -->
-                                    <ellipse cx="34" cy="43" rx="7" ry="7" fill="white"/>
-                                    <ellipse cx="35" cy="44" rx="4" ry="4" fill="#1E40AF"/>
-                                    <ellipse cx="36" cy="43" rx="1.5" ry="1.5" fill="white"/>
-                                    <!-- ตาขวา -->
-                                    <ellipse cx="56" cy="43" rx="7" ry="7" fill="white"/>
-                                    <ellipse cx="57" cy="44" rx="4" ry="4" fill="#1E40AF"/>
-                                    <ellipse cx="58" cy="43" rx="1.5" ry="1.5" fill="white"/>
-                                    <!-- แก้ม -->
-                                    <ellipse cx="25" cy="52" rx="5" ry="3.5" fill="#FCA5A5" opacity="0.7"/>
-                                    <ellipse cx="65" cy="52" rx="5" ry="3.5" fill="#FCA5A5" opacity="0.7"/>
-                                    <!-- ปาก (animated) -->
-                                    <g id="char-mouth">
-                                        <!-- ปากปิด (ปกติ) -->
-                                        <path id="mouth-closed" d="M38 58 Q45 63 52 58" stroke="#92400E" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-                                        <!-- ปากเปิด (ขณะพูด) -->
-                                        <ellipse id="mouth-open" cx="45" cy="60" rx="8" ry="5" fill="#92400E" class="hidden"/>
-                                        <ellipse id="mouth-teeth" cx="45" cy="57.5" rx="6" ry="2" fill="white" class="hidden"/>
-                                    </g>
-                                    <!-- แขนซ้าย -->
-                                    <ellipse cx="13" cy="82" rx="6" ry="14" fill="#60A5FA" transform="rotate(-15 13 82)"/>
+                    <div class="bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-100 border border-blue-100 rounded-3xl p-5 max-w-xl mx-auto relative overflow-hidden">
+                        <!-- background decoration -->
+                        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+                            <div class="absolute -top-8 -right-8 w-40 h-40 bg-blue-200/30 rounded-full blur-2xl"></div>
+                            <div class="absolute -bottom-6 -left-6 w-32 h-32 bg-indigo-200/30 rounded-full blur-xl"></div>
+                        </div>
+
+                        <div class="flex items-end justify-center gap-4 mb-4 relative z-10">
+                            <!-- ตัวการ์ตูน 3D -->
+                            <div class="relative shrink-0" style="filter: drop-shadow(0 8px 20px rgba(99,102,241,0.35)) drop-shadow(0 2px 6px rgba(0,0,0,0.18));">
+                                <svg id="char-svg" width="110" height="140" viewBox="0 0 110 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <defs>
+                                        <!-- gradient หัว (ผิว 3D) -->
+                                        <radialGradient id="skinGrad" cx="42%" cy="35%" r="60%">
+                                            <stop offset="0%" stop-color="#FFE0AC"/>
+                                            <stop offset="55%" stop-color="#FFCA7A"/>
+                                            <stop offset="100%" stop-color="#F0A840"/>
+                                        </radialGradient>
+                                        <!-- gradient ผม -->
+                                        <radialGradient id="hairGrad" cx="50%" cy="30%" r="65%">
+                                            <stop offset="0%" stop-color="#A16207"/>
+                                            <stop offset="100%" stop-color="#431407"/>
+                                        </radialGradient>
+                                        <!-- gradient ตัว/เสื้อ -->
+                                        <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#60A5FA"/>
+                                            <stop offset="100%" stop-color="#3B82F6"/>
+                                        </linearGradient>
+                                        <!-- gradient แก้มแดง -->
+                                        <radialGradient id="blushGrad" cx="50%" cy="50%" r="50%">
+                                            <stop offset="0%" stop-color="#FCA5A5" stop-opacity="0.9"/>
+                                            <stop offset="100%" stop-color="#FCA5A5" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <!-- gradient ตาขาว -->
+                                        <radialGradient id="eyeWhiteGrad" cx="40%" cy="35%" r="60%">
+                                            <stop offset="0%" stop-color="#ffffff"/>
+                                            <stop offset="100%" stop-color="#E0E7FF"/>
+                                        </radialGradient>
+                                        <!-- gradient ม่านตา -->
+                                        <radialGradient id="irisGrad" cx="38%" cy="35%" r="55%">
+                                            <stop offset="0%" stop-color="#4338CA"/>
+                                            <stop offset="60%" stop-color="#1D4ED8"/>
+                                            <stop offset="100%" stop-color="#1E3A8A"/>
+                                        </radialGradient>
+                                        <!-- shadow ใต้ตัว -->
+                                        <radialGradient id="shadowGrad" cx="50%" cy="30%" r="50%">
+                                            <stop offset="0%" stop-color="#6366F1" stop-opacity="0.25"/>
+                                            <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <!-- gradient กระดุม/badge -->
+                                        <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#F9A8D4"/>
+                                            <stop offset="100%" stop-color="#EC4899"/>
+                                        </linearGradient>
+                                        <!-- เงาพื้น -->
+                                        <filter id="softShadow">
+                                            <feGaussianBlur in="SourceGraphic" stdDeviation="3"/>
+                                        </filter>
+                                    </defs>
+
+                                    <!-- เงาพื้น -->
+                                    <ellipse cx="55" cy="136" rx="30" ry="6" fill="url(#shadowGrad)" filter="url(#softShadow)"/>
+
+                                    <!-- ===== ตัว/เสื้อ ===== -->
+                                    <ellipse cx="55" cy="118" rx="30" ry="20" fill="url(#bodyGrad)"/>
+                                    <!-- specular highlight บนเสื้อ -->
+                                    <ellipse cx="44" cy="106" rx="10" ry="5" fill="white" opacity="0.18" transform="rotate(-15 44 106)"/>
+                                    <!-- ขอบเสื้อล่าง -->
+                                    <ellipse cx="55" cy="134" rx="28" ry="7" fill="#2563EB"/>
+
+                                    <!-- badge / logo เสื้อ -->
+                                    <rect x="44" y="110" width="22" height="14" rx="5" fill="url(#badgeGrad)"/>
+                                    <text x="55" y="121" text-anchor="middle" font-size="6.5" font-weight="900" fill="white" font-family="Arial,sans-serif">BS</text>
+
+                                    <!-- แขนซ้าย (3D pill) -->
+                                    <ellipse cx="22" cy="110" rx="8" ry="16" fill="url(#bodyGrad)" transform="rotate(-20 22 110)"/>
+                                    <ellipse cx="19" cy="104" rx="3" ry="6" fill="white" opacity="0.18" transform="rotate(-20 19 104)"/>
+                                    <!-- มือซ้าย -->
+                                    <circle cx="17" cy="121" r="6.5" fill="url(#skinGrad)"/>
+                                    <ellipse cx="15" cy="119" r="2" fill="white" opacity="0.3"/>
+
                                     <!-- แขนขวา -->
-                                    <ellipse cx="77" cy="82" rx="6" ry="14" fill="#60A5FA" transform="rotate(15 77 82)"/>
+                                    <ellipse cx="88" cy="110" rx="8" ry="16" fill="url(#bodyGrad)" transform="rotate(20 88 110)"/>
+                                    <ellipse cx="91" cy="104" rx="3" ry="6" fill="white" opacity="0.18" transform="rotate(20 91 104)"/>
+                                    <!-- มือขวา -->
+                                    <circle cx="93" cy="121" r="6.5" fill="url(#skinGrad)"/>
+                                    <ellipse cx="91" cy="119" r="2" fill="white" opacity="0.3"/>
+
+                                    <!-- ===== คอ ===== -->
+                                    <rect x="46" y="88" width="18" height="14" rx="7" fill="#FFCA7A"/>
+                                    <rect x="48" y="88" width="8" height="10" rx="4" fill="white" opacity="0.15"/>
+
+                                    <!-- ===== หัว (sphere) ===== -->
+                                    <ellipse cx="55" cy="57" rx="36" ry="34" fill="url(#skinGrad)"/>
+                                    <!-- rim light ด้านขวา -->
+                                    <ellipse cx="80" cy="57" rx="8" ry="22" fill="#F0A840" opacity="0.3" transform="rotate(10 80 57)"/>
+                                    <!-- specular highlight หัว -->
+                                    <ellipse cx="41" cy="38" rx="12" ry="8" fill="white" opacity="0.22" transform="rotate(-20 41 38)"/>
+
+                                    <!-- ===== หู ===== -->
+                                    <ellipse cx="19" cy="57" rx="7" ry="9" fill="#FFCA7A"/>
+                                    <ellipse cx="19" cy="57" rx="4" ry="6" fill="#F0A840"/>
+                                    <ellipse cx="91" cy="57" rx="7" ry="9" fill="#FFCA7A"/>
+                                    <ellipse cx="91" cy="57" rx="4" ry="6" fill="#F0A840"/>
+
+                                    <!-- ===== ผม ===== -->
+                                    <!-- ทรงผมหนา มีความลึก -->
+                                    <ellipse cx="55" cy="28" rx="33" ry="16" fill="url(#hairGrad)"/>
+                                    <ellipse cx="55" cy="26" rx="28" ry="11" fill="#92400E"/>
+                                    <!-- ผมแสกกลาง -->
+                                    <ellipse cx="55" cy="24" rx="4" ry="8" fill="#431407"/>
+                                    <!-- กลิ่นผม/shine -->
+                                    <ellipse cx="44" cy="20" rx="9" ry="4" fill="white" opacity="0.12" transform="rotate(-10 44 20)"/>
+                                    <!-- sideburn ซ้าย -->
+                                    <ellipse cx="23" cy="40" rx="7" ry="14" fill="url(#hairGrad)"/>
+                                    <!-- sideburn ขวา -->
+                                    <ellipse cx="87" cy="40" rx="7" ry="14" fill="url(#hairGrad)"/>
+                                    <!-- fringe หน้าผาก -->
+                                    <path d="M30 32 Q40 20 55 22 Q70 20 80 32" fill="url(#hairGrad)" stroke="none"/>
+
+                                    <!-- ===== ตาขาว (3D) ===== -->
+                                    <ellipse cx="40" cy="55" rx="10" ry="10" fill="url(#eyeWhiteGrad)"/>
+                                    <ellipse cx="70" cy="55" rx="10" ry="10" fill="url(#eyeWhiteGrad)"/>
+                                    <!-- ขอบตา -->
+                                    <ellipse cx="40" cy="55" rx="10" ry="10" fill="none" stroke="#C4B5FD" stroke-width="0.8"/>
+                                    <ellipse cx="70" cy="55" rx="10" ry="10" fill="none" stroke="#C4B5FD" stroke-width="0.8"/>
+
+                                    <!-- ===== ม่านตา + pupil ===== -->
+                                    <ellipse cx="40" cy="56" rx="6" ry="6.5" fill="url(#irisGrad)"/>
+                                    <ellipse cx="70" cy="56" rx="6" ry="6.5" fill="url(#irisGrad)"/>
+                                    <!-- pupil ดำ -->
+                                    <ellipse cx="40" cy="57" rx="3" ry="3.5" fill="#0F172A"/>
+                                    <ellipse cx="70" cy="57" rx="3" ry="3.5" fill="#0F172A"/>
+                                    <!-- catchlight (specular ดวงตา ทำให้ดูมีชีวิต) -->
+                                    <ellipse cx="42" cy="53" rx="2" ry="2" fill="white"/>
+                                    <ellipse cx="72" cy="53" rx="2" ry="2" fill="white"/>
+                                    <ellipse cx="41" cy="57.5" rx="0.8" ry="0.8" fill="white" opacity="0.6"/>
+                                    <ellipse cx="71" cy="57.5" rx="0.8" ry="0.8" fill="white" opacity="0.6"/>
+
+                                    <!-- ===== คิ้ว ===== -->
+                                    <path d="M32 45 Q40 41 48 44" stroke="#92400E" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+                                    <path d="M62 44 Q70 41 78 45" stroke="#92400E" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+
+                                    <!-- ===== แก้ม ===== -->
+                                    <ellipse cx="27" cy="65" rx="9" ry="6" fill="url(#blushGrad)"/>
+                                    <ellipse cx="83" cy="65" rx="9" ry="6" fill="url(#blushGrad)"/>
+
+                                    <!-- ===== จมูก ===== -->
+                                    <ellipse cx="55" cy="66" rx="3.5" ry="2" fill="#E09030" opacity="0.5"/>
+
+                                    <!-- ===== ปาก (animated) ===== -->
+                                    <g id="char-mouth">
+                                        <!-- ปากปิด — ยิ้มน่ารัก -->
+                                        <path id="mouth-closed" d="M45 74 Q55 82 65 74" stroke="#C2410C" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                                        <!-- ปากเปิด (ขณะพูด) -->
+                                        <ellipse id="mouth-open" cx="55" cy="76" rx="11" ry="7" fill="#9A3412" class="hidden"/>
+                                        <ellipse id="mouth-teeth" cx="55" cy="71.5" rx="9" ry="3" fill="white" class="hidden"/>
+                                        <!-- ลิ้น -->
+                                        <ellipse id="mouth-tongue" cx="55" cy="79" rx="5" ry="3" fill="#F87171" class="hidden"/>
+                                    </g>
                                 </svg>
-                                <!-- ฟอง speech bubble เล็กๆ จากการ์ตูน -->
-                                <div id="char-speaking-bubble" class="hidden absolute -top-1 -right-2 bg-white border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
-                                    <div class="flex gap-0.5 items-center">
-                                        <span class="block w-1 h-1 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0s"></span>
-                                        <span class="block w-1 h-1 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0.15s"></span>
-                                        <span class="block w-1 h-1 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0.3s"></span>
+
+                                <!-- Speech bubble dots -->
+                                <div id="char-speaking-bubble" class="hidden absolute -top-2 -right-1 bg-white border-2 border-indigo-300 rounded-2xl px-2 py-1 shadow-lg shadow-indigo-200/50">
+                                    <div class="flex gap-1 items-end h-4">
+                                        <span class="block w-1.5 bg-indigo-400 rounded-full animate-bounce" style="height:4px;animation-delay:0s"></span>
+                                        <span class="block w-1.5 bg-indigo-400 rounded-full animate-bounce" style="height:7px;animation-delay:0.15s"></span>
+                                        <span class="block w-1.5 bg-indigo-400 rounded-full animate-bounce" style="height:5px;animation-delay:0.3s"></span>
                                     </div>
+                                    <!-- bubble tail -->
+                                    <div class="absolute -bottom-1.5 left-3 w-3 h-3 bg-white border-r-2 border-b-2 border-indigo-300 rotate-45"></div>
                                 </div>
                             </div>
+
                             <!-- กล่อง subtitle -->
-                            <div class="flex-1 min-h-[80px] bg-white/80 backdrop-blur-sm border border-blue-200 rounded-2xl p-3 shadow-sm flex flex-col justify-center">
-                                <div id="subtitle-header" class="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1.5"><i class="fas fa-closed-captioning mr-1"></i>ซับไตเติล</div>
+                            <div class="flex-1 min-h-[90px] bg-white/90 backdrop-blur-sm border border-indigo-200 rounded-2xl p-3 shadow-md shadow-indigo-100/60 flex flex-col justify-center">
+                                <div class="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                                    <i class="fas fa-closed-captioning"></i> ซับไตเติล
+                                </div>
                                 <p id="speech-subtitle" class="text-xs md:text-sm font-bold text-slate-700 leading-relaxed min-h-[40px]">กดปุ่มด้านล่างเพื่อให้น้องอ่านสรุปให้ฟัง 🎙️</p>
                             </div>
                         </div>
+
                         <!-- ปุ่มควบคุม -->
-                        <div class="flex items-center justify-center gap-3 flex-wrap">
-                            <button id="btn-audio-control" onclick="toggleSpeechSynthesis()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-7 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-300/40 transition-all flex items-center gap-2">
+                        <div class="flex items-center justify-center gap-3 flex-wrap relative z-10">
+                            <button id="btn-audio-control" onclick="toggleSpeechSynthesis()"
+                                class="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-7 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-300/40 transition-all flex items-center gap-2 active:scale-95">
                                 <i id="audio-icon" class="fas fa-volume-high"></i>
                                 <span id="audio-text" class="lang-audio-listen">รับฟังรายงานเสียงสรุป</span>
                             </button>
                         </div>
-                        <p class="text-[10px] text-slate-400 text-center mt-2 font-medium">เสียงขึ้นอยู่กับการตั้งค่า TTS ของอุปกรณ์คุณ</p>
+                        <p class="text-[10px] text-slate-400 text-center mt-2 font-medium relative z-10">เสียงขึ้นอยู่กับการตั้งค่า TTS ของอุปกรณ์คุณ</p>
                     </div>
                 </div>
 
@@ -461,7 +646,7 @@
 
             <!-- ตัวการ์ตูนพูด (SVG ขยับปาก/กระพริบตา ตามจังหวะเสียง) -->
             <div class="bg-gradient-to-b from-sky-100 to-blue-50 pt-8 pb-4 flex justify-center relative overflow-hidden">
-                <div class="absolute top-3 left-4 text-[10px] font-black text-blue-400 uppercase tracking-widest bg-white/70 px-2.5 py-1 rounded-full"><i class="fas fa-wind mr-1"></i>BREATHSAFE</div>
+                <div class="absolute top-3 left-4 text-[10px] font-black text-blue-400 uppercase tracking-widest bg-white/70 px-2.5 py-1 rounded-full"><i class="fas fa-wind mr-1"></i>AirWise Buddy</div>
                 <svg id="mascot-svg" viewBox="0 0 200 200" class="w-44 h-44 drop-shadow-md">
                     <!-- หู -->
                     <ellipse cx="56" cy="58" rx="16" ry="20" fill="#7DD3FC"/>
@@ -939,9 +1124,10 @@ const districtIssuesData = {
         // ขยับปากตัวการ์ตูนระหว่างพูด (สลับระหว่าง mouth-open และ mouth-closed ตามจังหวะแบบธรรมชาติ)
         function startMascotTalking() {
             const mouthClosed = document.getElementById('mouth-closed');
-            const mouthOpen = document.getElementById('mouth-open');
-            const mouthTeeth = document.getElementById('mouth-teeth');
-            const bubble = document.getElementById('char-speaking-bubble');
+            const mouthOpen   = document.getElementById('mouth-open');
+            const mouthTeeth  = document.getElementById('mouth-teeth');
+            const mouthTongue = document.getElementById('mouth-tongue');
+            const bubble      = document.getElementById('char-speaking-bubble');
             if (!mouthClosed) return;
             if (bubble) bubble.classList.remove('hidden');
             stopMascotTalking();
@@ -953,26 +1139,33 @@ const districtIssuesData = {
                     mouthClosed.classList.add('hidden');
                     mouthOpen.classList.remove('hidden');
                     mouthTeeth.classList.remove('hidden');
+                    // ลิ้นโชว์เป็นครั้งคราวให้ดูน่ารัก
+                    if (mouthTongue) mouthTongue.classList.toggle('hidden', Math.random() > 0.4);
                     // สุ่มขนาดปาก ry ให้ดูเป็นธรรมชาติ
-                    mouthOpen.setAttribute('ry', (4 + Math.random() * 5).toFixed(1));
+                    const openness = (4 + Math.random() * 5).toFixed(1);
+                    mouthOpen.setAttribute('ry', openness);
+                    if (mouthTeeth) mouthTeeth.setAttribute('cy', (parseFloat(mouthOpen.getAttribute('cy')) - parseFloat(openness) * 0.55).toFixed(1));
                 } else {
                     mouthClosed.classList.remove('hidden');
                     mouthOpen.classList.add('hidden');
                     mouthTeeth.classList.add('hidden');
+                    if (mouthTongue) mouthTongue.classList.add('hidden');
                 }
-            }, 120);
+            }, 110);
         }
 
         function stopMascotTalking() {
             if (mascotMouthInterval) { clearInterval(mascotMouthInterval); mascotMouthInterval = null; }
             const mouthClosed = document.getElementById('mouth-closed');
-            const mouthOpen = document.getElementById('mouth-open');
-            const mouthTeeth = document.getElementById('mouth-teeth');
-            const bubble = document.getElementById('char-speaking-bubble');
+            const mouthOpen   = document.getElementById('mouth-open');
+            const mouthTeeth  = document.getElementById('mouth-teeth');
+            const mouthTongue = document.getElementById('mouth-tongue');
+            const bubble      = document.getElementById('char-speaking-bubble');
             if (mouthClosed) mouthClosed.classList.remove('hidden');
-            if (mouthOpen) mouthOpen.classList.add('hidden');
-            if (mouthTeeth) mouthTeeth.classList.add('hidden');
-            if (bubble) bubble.classList.add('hidden');
+            if (mouthOpen)   mouthOpen.classList.add('hidden');
+            if (mouthTeeth)  mouthTeeth.classList.add('hidden');
+            if (mouthTongue) mouthTongue.classList.add('hidden');
+            if (bubble)      bubble.classList.add('hidden');
         }
 
         // กระพริบตาเป็นช่วงๆ ให้ตัวการ์ตูนดูมีชีวิตชีวา (ไม่ได้ใช้กับ SVG ตัวการ์ตูนใหม่ที่ไม่มี mascot-eyes แต่ไว้สำรอง)
@@ -1236,27 +1429,68 @@ const districtIssuesData = {
         
         // --- 9.1 โหลดข้อมูลจำลองเมื่อเปิดระบบครั้งแรก (หากไม่มีข้อมูล) ---
         function seedInitialData() {
-            if (!localStorage.getItem('airwise_hero')) {
-                localStorage.setItem('airwise_hero', 'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?q=80&w=1200&auto=format&fit=crop');
+            if (!localStorage.getItem('breathsafe_hero')) {
+                localStorage.setItem('breathsafe_hero', 'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?q=80&w=1200&auto=format&fit=crop');
             }
-            if (!localStorage.getItem('airwise_news')) {
-                localStorage.setItem('airwise_news', JSON.stringify([]));
+            if (!localStorage.getItem('breathsafe_news')) {
+                localStorage.setItem('breathsafe_news', JSON.stringify([]));
             }
-            if (!localStorage.getItem('airwise_about')) {
+            if (!localStorage.getItem('breathsafe_about')) {
                 const defaultMembers = [
                     { id: Date.now().toString(), name: "นาย สมชาย พัฒนาดี", nickname: "สมชาย", age: 17, grade: "ม.5/1", school: "โรงเรียนเตรียมอุดมศึกษาภาคใต้", image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80", custom: "ผู้จัดการโครงงาน / Frontend" }
                 ];
-                localStorage.setItem('airwise_about', JSON.stringify(defaultMembers));
+                localStorage.setItem('breathsafe_about', JSON.stringify(defaultMembers));
             }
         }
 
         // --- 9.2 ระบบจัดการภาพหน้าปก (Hero Section) ---
+        // ------------------------------------------------------------------
+        // Helper: แสดงรูปหน้าปกจาก URL (ใช้ได้ทั้งจาก Firebase Storage URL และ Base64)
+        // ------------------------------------------------------------------
+        function renderHeroCoverFromUrl(url) {
+            if (!url) return;
+            const el = document.getElementById('hero-section');
+            if (el) el.style.backgroundImage = `linear-gradient(to right, rgba(255,255,255,0.96) 35%, rgba(255,255,255,0.2)), url('${url}')`;
+        }
         function renderHeroCover() {
-            const coverUrl = localStorage.getItem('airwise_hero');
-            document.getElementById('hero-section').style.backgroundImage = `linear-gradient(to right, rgba(255,255,255,0.96) 35%, rgba(255,255,255,0.2)), url('${coverUrl}')`;
+            renderHeroCoverFromUrl(localStorage.getItem('breathsafe_hero'));
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: อัปโหลด Base64 รูปภาพที่ crop แล้วไป Firebase Storage
+        // คืนค่า public download URL พร้อมใช้งาน
+        // path ตัวอย่าง: "hero/cover.jpg", "news/1717000000.jpg", "about/member_1717000000.jpg"
+        // ------------------------------------------------------------------
+        async function uploadImageToStorage(base64DataUrl, storagePath) {
+            if (!window.fbStorage || !window.fbModules) {
+                // Fallback: ถ้าไม่มี Firebase ให้คืน Base64 เดิม (offline mode)
+                return base64DataUrl;
+            }
+            const storageRef = window.fbModules.ref(window.fbStorage, storagePath);
+            // uploadString รองรับ data_url format โดยตรง
+            await window.fbModules.uploadString(storageRef, base64DataUrl, 'data_url');
+            const downloadUrl = await window.fbModules.getDownloadURL(storageRef);
+            return downloadUrl;
+        }
+
+        // Helper: ลบรูปเก่าออกจาก Storage (เรียกก่อนอัปโหลดรูปใหม่ทับ)
+        async function deleteImageFromStorage(imageUrl) {
+            if (!window.fbStorage || !window.fbModules || !imageUrl) return;
+            try {
+                // ดึง path จาก Firebase Storage URL
+                const urlObj = new URL(imageUrl);
+                const encodedPath = urlObj.pathname.split('/o/')[1]?.split('?')[0];
+                if (!encodedPath) return;
+                const filePath = decodeURIComponent(encodedPath);
+                const oldRef = window.fbModules.ref(window.fbStorage, filePath);
+                await window.fbModules.deleteObject(oldRef);
+            } catch (e) {
+                // ไม่ต้องหยุดถ้าลบเก่าไม่ได้ (อาจถูกลบแล้ว)
+                console.warn('deleteImageFromStorage warning:', e.message);
+            }
         }
         window.openHeroModal = () => {
-            const existing = localStorage.getItem('airwise_hero');
+            const existing = localStorage.getItem('breathsafe_hero');
             const previewImg = document.getElementById('hero-preview-img');
             const placeholder = document.getElementById('hero-upload-placeholder');
             document.getElementById('form-hero-file').value = '';
@@ -1272,14 +1506,37 @@ const districtIssuesData = {
             }
             openModal('modal-admin-hero');
         };
-        window.processSaveHeroBanner = () => {
+        window.processSaveHeroBanner = async () => {
             const previewImg = document.getElementById('hero-preview-img');
-            const newImageData = previewImg.dataset.base64;
-            if (!newImageData) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่ได้เลือกรูปภาพ' : 'No image selected', text: currentLang === 'th' ? 'กรุณาเลือกรูปภาพหน้าปกก่อนบันทึก' : 'Please choose a cover image first.', confirmButtonColor: '#3b82f6' });
-            localStorage.setItem('airwise_hero', newImageData);
-            renderHeroCover();
-            closeActiveModal('modal-admin-hero');
-            Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ' : 'Saved', text: currentLang === 'th' ? 'เปลี่ยนภาพหน้าปกเรียบร้อยแล้ว' : 'Cover image updated successfully.', timer: 1500, showConfirmButton: false });
+            const base64Data = previewImg.dataset.base64;
+            if (!base64Data) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่ได้เลือกรูปภาพ' : 'No image selected', text: currentLang === 'th' ? 'กรุณาเลือกรูปภาพหน้าปกก่อนบันทึก' : 'Please choose a cover image first.', confirmButtonColor: '#3b82f6' });
+
+            // แสดง loading
+            Swal.fire({ title: currentLang === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...', text: currentLang === 'th' ? 'กำลังบันทึกรูปภาพไปยัง Firebase' : 'Saving image to Firebase Storage', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                // อัปโหลดรูปไป Firebase Storage (path คงที่ — ทับรูปเก่าเสมอ)
+                const imageUrl = await uploadImageToStorage(base64Data, 'hero/cover.jpg');
+
+                if (window.fbDb && window.fbModules) {
+                    // บันทึก URL ลง Firestore document "siteConfig/heroCover"
+                    // onSnapshot ด้านบนจะ trigger renderHeroCoverFromUrl อัตโนมัติสำหรับทุก session
+                    await window.fbModules.setDoc(
+                        window.fbModules.doc(window.fbDb, 'siteConfig', 'heroCover'),
+                        { imageUrl, updatedAt: Date.now() }
+                    );
+                } else {
+                    // Offline fallback
+                    localStorage.setItem('breathsafe_hero', imageUrl);
+                    renderHeroCoverFromUrl(imageUrl);
+                }
+
+                closeActiveModal('modal-admin-hero');
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ!' : 'Saved!', text: currentLang === 'th' ? 'เปลี่ยนภาพหน้าปกเรียบร้อย — ผู้ใช้ทุกคนจะเห็นรูปใหม่ทันที' : 'Cover image updated — all users will see it immediately.', timer: 2000, showConfirmButton: false });
+            } catch (err) {
+                console.error('processSaveHeroBanner error:', err);
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'อัปโหลดไม่สำเร็จ' : 'Upload Failed', text: err.message, confirmButtonColor: '#ef4444' });
+            }
         };
 
         // -------------------------------------------------------------
@@ -1612,7 +1869,7 @@ const districtIssuesData = {
 
         // --- 9.3 ระบบจัดการข่าวสาร (News Engine) ---
         window.renderNewsCards = () => {
-            const newsData = JSON.parse(localStorage.getItem('airwise_news') || "[]");
+            const newsData = JSON.parse(localStorage.getItem('breathsafe_news') || "[]");
             const container = document.getElementById('news-grid-container');
             const emptyState = document.getElementById('news-empty-state');
             container.innerHTML = '';
@@ -1662,30 +1919,67 @@ const districtIssuesData = {
             openModal('modal-admin-news');
         };
         
-        window.processSaveNewsRecord = () => {
+        window.processSaveNewsRecord = async () => {
             const id = document.getElementById('form-news-edit-id').value;
             const title = document.getElementById('form-news-title').value.trim();
             const desc = document.getElementById('form-news-desc').value.trim();
-            const image = document.getElementById('form-news-image').value.trim();
             const date = document.getElementById('form-news-date').value;
+            // รูปภาพ: ถ้ามี base64 ใหม่ (จากการ crop) ให้ upload; ถ้าไม่มีแต่เป็นการ edit ให้ใช้ URL เดิม
+            const previewImg = document.getElementById('news-preview-img');
+            const newBase64 = previewImg.dataset.base64 || '';
+            const existingUrl = document.getElementById('form-news-image').value.trim();
+            const isBase64 = newBase64.startsWith('data:');
 
-            if(!title || !desc || !image || !date) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณากรอกข้อมูลและอัปโหลดรูปภาพให้ครบถ้วน' : 'Please fill all fields and upload an image.', confirmButtonColor: '#3b82f6' });
+            if (!title || !desc || !date) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณากรอกข้อมูลให้ครบทุกช่อง' : 'Please fill in all fields.', confirmButtonColor: '#3b82f6' });
+            if (!isBase64 && !existingUrl) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่มีรูปภาพ' : 'No image', text: currentLang === 'th' ? 'กรุณาอัปโหลดและครอปรูปภาพก่อนบันทึก' : 'Please upload and crop an image first.', confirmButtonColor: '#3b82f6' });
 
-            let newsList = JSON.parse(localStorage.getItem('airwise_news') || "[]");
-            if(id) {
-                const index = newsList.findIndex(n => n.id === id);
-                if(index > -1) newsList[index] = { id, title, desc, image, date };
-            } else {
-                newsList.unshift({ id: Date.now().toString(), title, desc, image, date });
+            Swal.fire({ title: currentLang === 'th' ? 'กำลังบันทึก...' : 'Saving...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                let imageUrl = existingUrl;
+
+                if (isBase64) {
+                    // อัปโหลดรูปใหม่ไป Firebase Storage
+                    const timestamp = Date.now();
+                    const storagePath = `news/${id || timestamp}.jpg`;
+                    imageUrl = await uploadImageToStorage(newBase64, storagePath);
+                }
+
+                const newsData = { title, desc, image: imageUrl, date, timestamp: Date.now() };
+
+                if (window.fbDb && window.fbModules) {
+                    if (id) {
+                        // แก้ไขข่าวเดิม (update document ที่มี id นั้น)
+                        await window.fbModules.updateDoc(
+                            window.fbModules.doc(window.fbDb, 'news', id), newsData
+                        );
+                    } else {
+                        // เพิ่มข่าวใหม่ (Firestore จะสร้าง id ให้อัตโนมัติ)
+                        await window.fbModules.addDoc(
+                            window.fbModules.collection(window.fbDb, 'news'), newsData
+                        );
+                    }
+                    // onSnapshot จะ trigger renderNewsCards() อัตโนมัติ ไม่ต้อง call เอง
+                } else {
+                    // Offline fallback
+                    let list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+                    if (id) { const i = list.findIndex(n => n.id === id); if (i > -1) list[i] = { id, ...newsData }; }
+                    else list.unshift({ id: Date.now().toString(), ...newsData });
+                    localStorage.setItem('breathsafe_news', JSON.stringify(list));
+                    renderNewsCards();
+                }
+
+                closeActiveModal('modal-admin-news');
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ!' : 'Saved!', text: currentLang === 'th' ? 'ข่าวถูกเผยแพร่แล้ว — ผู้ใช้ทุกคนจะเห็นทันที' : 'News published — all users will see it immediately.', timer: 2000, showConfirmButton: false });
+            } catch (err) {
+                console.error('processSaveNewsRecord error:', err);
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'บันทึกไม่สำเร็จ' : 'Save Failed', text: err.message, confirmButtonColor: '#ef4444' });
             }
-            localStorage.setItem('airwise_news', JSON.stringify(newsList));
-            renderNewsCards(); closeActiveModal('modal-admin-news');
-            Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'สำเร็จ' : 'Success', text: currentLang === 'th' ? 'บันทึกข่าวประกาศเรียบร้อยแล้ว' : 'News announcement saved successfully.', timer: 1500, showConfirmButton: false });
         };
 
         window.editNewsRecord = (id, event) => {
             event.stopPropagation();
-            const newsList = JSON.parse(localStorage.getItem('airwise_news') || "[]");
+            const newsList = JSON.parse(localStorage.getItem('breathsafe_news') || "[]");
             const news = newsList.find(n => n.id === id);
             if(news) {
                 document.getElementById('form-news-edit-id').value = news.id;
@@ -1709,24 +2003,36 @@ const districtIssuesData = {
             const result = await Swal.fire({
                 icon: 'warning',
                 title: currentLang === 'th' ? 'ยืนยันการลบข่าว' : 'Confirm Delete',
-                text: currentLang === 'th' ? 'ต้องการลบข่าวสารนี้ออกจากระบบหรือไม่?' : 'Are you sure you want to delete this news?',
+                text: currentLang === 'th' ? 'ต้องการลบข่าวสารนี้ออกจากระบบหรือไม่? ไม่สามารถกู้คืนได้' : 'Delete this news permanently? This cannot be undone.',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
                 cancelButtonColor: '#94a3b8',
                 confirmButtonText: currentLang === 'th' ? '✕ ลบเลย' : 'Yes, delete',
                 cancelButtonText: currentLang === 'th' ? 'ยกเลิก' : 'Cancel'
             });
-            if (result.isConfirmed) {
-                let newsList = JSON.parse(localStorage.getItem('airwise_news') || "[]");
-                newsList = newsList.filter(n => n.id !== id);
-                localStorage.setItem('airwise_news', JSON.stringify(newsList));
-                renderNewsCards();
+            if (!result.isConfirmed) return;
+
+            try {
+                if (window.fbDb && window.fbModules) {
+                    // หา imageUrl ก่อนลบ เพื่อลบรูปใน Storage ด้วย
+                    const newsList = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+                    const targetNews = newsList.find(n => n.id === id);
+                    if (targetNews?.image) await deleteImageFromStorage(targetNews.image);
+                    await window.fbModules.deleteDoc(window.fbModules.doc(window.fbDb, 'news', id));
+                    // onSnapshot จะ trigger renderNewsCards() อัตโนมัติ
+                } else {
+                    let list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+                    localStorage.setItem('breathsafe_news', JSON.stringify(list.filter(n => n.id !== id)));
+                    renderNewsCards();
+                }
                 Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'ลบสำเร็จ' : 'Deleted', timer: 1200, showConfirmButton: false });
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Error', text: err.message, confirmButtonColor: '#ef4444' });
             }
         };
 
         window.viewFullNews = (id) => {
-            const newsList = JSON.parse(localStorage.getItem('airwise_news') || "[]");
+            const newsList = JSON.parse(localStorage.getItem('breathsafe_news') || "[]");
             const news = newsList.find(n => n.id === id);
             if(news) {
                 document.getElementById('view-news-img').src = news.image;
@@ -1739,7 +2045,7 @@ const districtIssuesData = {
 
         // --- 9.4 ระบบจัดการคณะผู้จัดทำ (About Us Engine) ---
         window.renderAboutCards = () => {
-            const members = JSON.parse(localStorage.getItem('airwise_about') || "[]");
+            const members = JSON.parse(localStorage.getItem('breathsafe_about') || "[]");
             const container = document.getElementById('about-cards-grid');
             container.innerHTML = '';
             
@@ -1804,32 +2110,62 @@ const districtIssuesData = {
             document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-plus text-blue-500 mr-2"></i>${currentLang === 'th' ? "เพิ่มข้อมูลคณะผู้จัดทำใหม่" : "Add New Member"}`; openModal('modal-admin-about');
         };
 
-        window.processSaveAboutRecord = () => {
+        window.processSaveAboutRecord = async () => {
             const id = document.getElementById('form-about-edit-id').value;
             const name = document.getElementById('form-about-name').value.trim();
             const nickname = document.getElementById('form-about-nickname').value.trim();
             const age = document.getElementById('form-about-age').value.trim();
             const grade = document.getElementById('form-about-grade').value.trim();
             const school = document.getElementById('form-about-school').value.trim();
-            const image = document.getElementById('form-about-image').value.trim();
             const custom = document.getElementById('form-about-custom').value.trim();
+            const previewImg = document.getElementById('about-preview-img');
+            const newBase64 = previewImg.dataset.base64 || '';
+            const existingUrl = document.getElementById('form-about-image').value.trim();
+            const isBase64 = newBase64.startsWith('data:');
 
-            if(!name) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณาระบุชื่อ-นามสกุล' : 'Please provide a name.', confirmButtonColor: '#4f46e5' });
+            if (!name) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณาระบุชื่อ-นามสกุล' : 'Please provide a name.', confirmButtonColor: '#4f46e5' });
 
-            let members = JSON.parse(localStorage.getItem('airwise_about') || "[]");
-            if(id) {
-                const index = members.findIndex(m => m.id === id);
-                if(index > -1) members[index] = { id, name, nickname, age, grade, school, image, custom };
-            } else {
-                members.push({ id: Date.now().toString(), name, nickname, age, grade, school, image, custom });
+            Swal.fire({ title: currentLang === 'th' ? 'กำลังบันทึก...' : 'Saving...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                let imageUrl = existingUrl;
+                if (isBase64) {
+                    // รูปโปรไฟล์วงกลม — ใช้ path unique ต่อสมาชิก
+                    const uid = id || Date.now().toString();
+                    imageUrl = await uploadImageToStorage(newBase64, `about/member_${uid}.jpg`);
+                }
+
+                const memberData = { name, nickname, age, grade, school, image: imageUrl, custom, order: Date.now() };
+
+                if (window.fbDb && window.fbModules) {
+                    if (id) {
+                        await window.fbModules.updateDoc(
+                            window.fbModules.doc(window.fbDb, 'aboutMembers', id), memberData
+                        );
+                    } else {
+                        await window.fbModules.addDoc(
+                            window.fbModules.collection(window.fbDb, 'aboutMembers'), memberData
+                        );
+                    }
+                    // onSnapshot จะ trigger renderAboutCards() อัตโนมัติ
+                } else {
+                    let members = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
+                    if (id) { const i = members.findIndex(m => m.id === id); if (i > -1) members[i] = { id, ...memberData }; }
+                    else members.push({ id: Date.now().toString(), ...memberData });
+                    localStorage.setItem('breathsafe_about', JSON.stringify(members));
+                    renderAboutCards();
+                }
+
+                closeActiveModal('modal-admin-about');
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ!' : 'Saved!', text: currentLang === 'th' ? 'ข้อมูลคณะผู้จัดทำอัปเดตแล้ว — ผู้ใช้ทุกคนจะเห็นทันที' : 'Member info updated — all users will see it immediately.', timer: 2000, showConfirmButton: false });
+            } catch (err) {
+                console.error('processSaveAboutRecord error:', err);
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'บันทึกไม่สำเร็จ' : 'Save Failed', text: err.message, confirmButtonColor: '#ef4444' });
             }
-            localStorage.setItem('airwise_about', JSON.stringify(members));
-            renderAboutCards(); closeActiveModal('modal-admin-about');
-            Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'สำเร็จ' : 'Success', text: currentLang === 'th' ? 'บันทึกข้อมูลคณะผู้จัดทำเรียบร้อยแล้ว' : 'Team member info saved successfully.', timer: 1500, showConfirmButton: false });
         };
 
         window.editAboutRecord = (id) => {
-            const members = JSON.parse(localStorage.getItem('airwise_about') || "[]");
+            const members = JSON.parse(localStorage.getItem('breathsafe_about') || "[]");
             const member = members.find(m => m.id === id);
             if(member) {
                 document.getElementById('form-about-edit-id').value = member.id; document.getElementById('form-about-name').value = member.name; document.getElementById('form-about-nickname').value = member.nickname; document.getElementById('form-about-age').value = member.age; document.getElementById('form-about-grade').value = member.grade; document.getElementById('form-about-school').value = member.school; document.getElementById('form-about-image').value = member.image; document.getElementById('form-about-file').value = ''; document.getElementById('form-about-custom').value = member.custom;
@@ -1852,19 +2188,30 @@ const districtIssuesData = {
             const result = await Swal.fire({
                 icon: 'warning',
                 title: currentLang === 'th' ? 'ยืนยันการลบสมาชิก' : 'Confirm Delete',
-                text: currentLang === 'th' ? 'ต้องการลบสมาชิกคณะผู้จัดทำออกจากระบบหรือไม่?' : 'Are you sure you want to remove this member?',
+                text: currentLang === 'th' ? 'ต้องการลบสมาชิกคณะผู้จัดทำออกจากระบบหรือไม่? ไม่สามารถกู้คืนได้' : 'Remove this member permanently? This cannot be undone.',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
                 cancelButtonColor: '#94a3b8',
                 confirmButtonText: currentLang === 'th' ? '✕ ลบเลย' : 'Yes, remove',
                 cancelButtonText: currentLang === 'th' ? 'ยกเลิก' : 'Cancel'
             });
-            if (result.isConfirmed) {
-                let members = JSON.parse(localStorage.getItem('airwise_about') || "[]");
-                members = members.filter(m => m.id !== id);
-                localStorage.setItem('airwise_about', JSON.stringify(members));
-                renderAboutCards();
+            if (!result.isConfirmed) return;
+
+            try {
+                if (window.fbDb && window.fbModules) {
+                    const members = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
+                    const target = members.find(m => m.id === id);
+                    if (target?.image) await deleteImageFromStorage(target.image);
+                    await window.fbModules.deleteDoc(window.fbModules.doc(window.fbDb, 'aboutMembers', id));
+                    // onSnapshot จะ trigger renderAboutCards() อัตโนมัติ
+                } else {
+                    let members = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
+                    localStorage.setItem('breathsafe_about', JSON.stringify(members.filter(m => m.id !== id)));
+                    renderAboutCards();
+                }
                 Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'ลบสำเร็จ' : 'Removed', timer: 1200, showConfirmButton: false });
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Error', text: err.message, confirmButtonColor: '#ef4444' });
             }
         };
 
@@ -1897,7 +2244,7 @@ const districtIssuesData = {
                 document.getElementById('input-admin-username').value = '';
                 document.getElementById('input-admin-password').value = '';
                 Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบแอดมินสำเร็จ!' : 'Admin Access Granted!', text: currentLang === 'th' ? 'ยินดีต้อนรับผู้ดูแลระบบ BREATHSAFE' : 'Welcome, BREATHSAFE Administrator', timer: 1800, showConfirmButton: false });
-                const mockAdminUser = { email: "admin@airwise.system", displayName: "System Administrator" };
+                const mockAdminUser = { email: "admin@breathsafe.app", displayName: "System Administrator" };
                 setLoginState(true, mockAdminUser);
             } else {
                 Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Access Denied', text: currentLang === 'th' ? 'รหัสแอดมินหรือรหัสผ่านไม่ถูกต้อง ปฏิเสธการเข้าถึง' : 'Invalid admin credentials. Access denied.', confirmButtonColor: '#ef4444' });
@@ -1919,7 +2266,7 @@ const districtIssuesData = {
                         setLoginState(false, userCredential.user);
                     } else {
                         const userCredential = await window.fbModules.signInWithEmailAndPassword(window.fbAuth, email, password);
-                        const isAdmin = email === "admin@airwise.com";
+                        const isAdmin = email === "admin@breathsafe.app";
                         Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบสำเร็จ' : 'Signed In', text: currentLang === 'th' ? 'ยินดีต้อนรับเข้าสู่ระบบ BREATHSAFE' : 'Welcome back to BREATHSAFE!', timer: 1500, showConfirmButton: false });
                         setLoginState(isAdmin, userCredential.user);
                     }
@@ -1936,7 +2283,7 @@ const districtIssuesData = {
             if (window.fbAuth && window.googleProvider) {
                 try {
                     const result = await window.fbModules.signInWithPopup(window.fbAuth, window.googleProvider);
-                    const isAdmin = result.user.email === "admin@airwise.com";
+                    const isAdmin = result.user.email === "admin@breathsafe.app";
                     setLoginState(isAdmin, result.user);
                 } catch (error) {
                     console.error("Google Auth Error:", error);
@@ -1965,7 +2312,7 @@ const districtIssuesData = {
                 document.getElementById('box-user-authentication').classList.add('hidden');
                 document.getElementById('box-admin-authentication').classList.add('hidden');
                 document.getElementById('box-profile-authenticated').classList.remove('hidden');
-                document.getElementById('authenticated-user-name').innerText = userObject.displayName || userObject.email || "Airwise User";
+                document.getElementById('authenticated-user-name').innerText = userObject.displayName || userObject.email || "Breathsafe User";
                 
                 if (isAdmin) {
                     document.getElementById('admin-badge').classList.remove('hidden');
@@ -2176,7 +2523,7 @@ window.addEventListener('hashchange', () => {
     <script>
         // ฟังก์ชันจัดการ Cookie Banner — accepted=true (ยอมรับ) / false (ปฏิเสธ/ปิด)
         function dismissCookieBanner(accepted) {
-            localStorage.setItem('airwise_cookie_accepted', accepted ? 'true' : 'false');
+            localStorage.setItem('breathsafe_cookie_accepted', accepted ? 'true' : 'false');
 
             // ทำให้แถบเลื่อนลงไปด้านล่างอย่างนุ่มนวล
             const banner = document.getElementById('cookie-banner');
@@ -2193,7 +2540,7 @@ window.addEventListener('hashchange', () => {
         // ตรวจสอบสถานะเมื่อโหลดหน้าเว็บเสร็จสิ้น
         window.addEventListener('DOMContentLoaded', () => {
             // หากยังไม่เคยกดยอมรับคุกกี้ ให้แสดงแถบขึ้นมา
-            if (!localStorage.getItem('airwise_cookie_accepted')) {
+            if (!localStorage.getItem('breathsafe_cookie_accepted')) {
                 setTimeout(() => {
                     const banner = document.getElementById('cookie-banner');
                     banner.classList.remove('translate-y-full');
@@ -2437,7 +2784,7 @@ window.addEventListener('hashchange', () => {
                 </div>
                 <div>
                     <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Facebook Page</div>
-                    <div class="text-xs font-bold text-blue-700 truncate max-w-[140px]">เพจโรงเรียนเรียนเตรียมอุดมศึกษาภาคใต้ (Official)</div>
+                    <div class="text-xs font-bold text-blue-700 truncate max-w-[140px]">ทรม. ภาคใต้ (Official)</div>
                 </div>
                 <i class="fas fa-arrow-up-right-from-square text-blue-400 text-[10px] ml-auto shrink-0"></i>
             </a>
