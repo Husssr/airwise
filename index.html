@@ -1630,22 +1630,47 @@ const districtIssuesData = {
         // คืนค่า public download URL พร้อมใช้งาน
         // path ตัวอย่าง: "hero/cover.jpg", "news/1717000000.jpg", "about/member_1717000000.jpg"
         // ------------------------------------------------------------------
-        async function uploadImageToStorage(base64DataUrl, storagePath) {
-            if (!window.fbStorage || !window.fbModules) {
-                // Fallback: ถ้าไม่มี Firebase ให้คืน Base64 เดิม (offline mode)
-                return base64DataUrl;
+        const IMGBB_API_KEY = "a13d292b031ea791491a918a2d48ebdf08ab1f870abfa333db5ca2e7aad98f68";
+        const IMGBB_API_KEY = "a13d292b031ea791491a918a2d48ebdf08ab1f870abfa333db5ca2e7aad98f68";
+
+async function uploadImageToStorage(base64DataUrl, storagePath) {
+
+    try {
+
+        const base64Image = base64DataUrl.split(',')[1];
+
+        const formData = new FormData();
+
+        formData.append("key", IMGBB_API_KEY);
+        formData.append("image", base64Image);
+        formData.append("name", storagePath.replaceAll("/", "_"));
+
+        const response = await fetch(
+            "https://api.imgbb.com/1/upload",
+            {
+                method: "POST",
+                body: formData
             }
-            const storageRef = window.fbModules.ref(window.fbStorage, storagePath);
-            // uploadString รองรับ data_url format โดยตรง
-            await window.fbModules.uploadString(storageRef, base64DataUrl, 'data_url');
-            const downloadUrl = await window.fbModules.getDownloadURL(storageRef);
-            return downloadUrl;
+        );
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error("ImgBB Upload Failed");
         }
+
+        return result.data.url;
+
+    } catch (err) {
+        console.error("ImgBB Error:", err);
+        throw err;
+    }
+}
 
         // Helper: ลบรูปเก่าออกจาก Storage (เรียกก่อนอัปโหลดรูปใหม่ทับ)
         async function deleteImageFromStorage(imageUrl) {
-            if (!window.fbStorage || !window.fbModules || !imageUrl) return;
-            try {
+    return true;
+}
                 // ดึง path จาก Firebase Storage URL
                 const urlObj = new URL(imageUrl);
                 const encodedPath = urlObj.pathname.split('/o/')[1]?.split('?')[0];
