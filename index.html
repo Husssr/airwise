@@ -19,15 +19,16 @@
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // คีย์เชื่อมต่อฐานข้อมูล Google Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyCKdLVy7fcWRcAW72zrtR6H1oIrJoPFsQQ",
-            authDomain: "breathsafe-project-d3556.firebaseapp.com",
-            projectId: "breathsafe-project-d3556",
-            storageBucket: "breathsafe-project-d3556.firebasestorage.app",
-            messagingSenderId: "104485361484",
-            appId: "1:104485361484:web:c3a931f5f6e0a0499861e9"
-        };
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCKdLVy7fcWRcAW72zrtR6H1oIrJoPFsQQ",
+  authDomain: "airwise-project-d3556.firebaseapp.com",
+  projectId: "airwise-project-d3556",
+  storageBucket: "airwise-project-d3556.firebasestorage.app",
+  messagingSenderId: "104485361484",
+  appId: "1:104485361484:web:d0e490eed63a11e99861e9",
+  measurementId: "G-HTER90T3GJ"
+};
 
         let app, auth, db, googleProvider;
         if(firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY_HERE") {
