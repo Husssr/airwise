@@ -74,6 +74,7 @@ const firebaseConfig = {
                     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 localStorage.setItem('breathsafe_news', JSON.stringify(newsList));
                 if (typeof renderNewsCards === 'function') renderNewsCards();
+                if (typeof window.renderNewsAll === 'function') window.renderNewsAll();
             });
 
             // 3) About Members — เรียงตาม order
@@ -94,6 +95,51 @@ const firebaseConfig = {
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-track { background-color: transparent; }
+
+        /* ============================================================
+           DARK MODE — smooth transition ทุก element
+           ============================================================ */
+        *, *::before, *::after {
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease, box-shadow 0.3s ease;
+        }
+        /* ยกเว้น element ที่มี transition ของตัวเองอยู่แล้ว */
+        .view-section, #char-svg, .dust-particle, .dust-ring, .dust-orb { transition: unset; }
+        .view-section { transition: opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1); }
+
+        html.dark body { background-color: #0f172a; color: #e2e8f0; }
+        html.dark .bg-white { background-color: #1e293b !important; }
+        html.dark .bg-slate-50, html.dark .bg-slate-50\/80 { background-color: #162032 !important; }
+        html.dark .bg-slate-100 { background-color: #1e293b !important; }
+        html.dark .text-slate-900 { color: #f1f5f9 !important; }
+        html.dark .text-slate-800 { color: #e2e8f0 !important; }
+        html.dark .text-slate-700 { color: #cbd5e1 !important; }
+        html.dark .text-slate-600 { color: #94a3b8 !important; }
+        html.dark .text-slate-500 { color: #64748b !important; }
+        html.dark .border-slate-200, html.dark .border-slate-200\/80, html.dark .border-slate-100 { border-color: #334155 !important; }
+        html.dark header { background-color: #0f172a !important; border-bottom: 1px solid #1e293b; }
+        html.dark #mobile-menu-dropdown { background-color: #1e293b !important; }
+        html.dark .hover\:bg-slate-50:hover { background-color: #1e293b !important; }
+        html.dark .hover\:bg-blue-50:hover { background-color: #1e3a5f !important; }
+        html.dark input, html.dark textarea, html.dark select { background-color: #1e293b !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+        html.dark .shadow-sm, html.dark .shadow-md, html.dark .shadow-lg { box-shadow: 0 2px 12px rgba(0,0,0,0.5) !important; }
+        html.dark #dust-loading-overlay { background: radial-gradient(ellipse at center, rgba(2,8,23,0.99) 0%, rgba(0,0,0,1) 100%); }
+
+        /* Dark mode toggle button */
+        #theme-toggle {
+            position: relative; width: 52px; height: 28px;
+            background: #e2e8f0; border-radius: 99px;
+            cursor: pointer; border: none; outline: none;
+            transition: background 0.35s ease; flex-shrink: 0;
+        }
+        html.dark #theme-toggle { background: #334155; }
+        #theme-toggle-knob {
+            position: absolute; top: 3px; left: 3px;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: white; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), background 0.3s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        html.dark #theme-toggle-knob { transform: translateX(24px); background: #1e293b; }
 
         /* ============================================================
            DUST LOADING OVERLAY — Professional particle upload animation
@@ -295,7 +341,14 @@ const firebaseConfig = {
 
             <div class="flex items-center space-x-2 md:space-x-3">
                 <span id="admin-badge" class="hidden bg-rose-50 text-rose-600 text-[10px] px-2.5 py-1 rounded-lg font-extrabold uppercase tracking-widest border border-rose-200 animate-pulse"><i class="fas fa-user-crown mr-1"></i>Admin</span>
-                
+
+                <!-- Dark/Light mode toggle -->
+                <button id="theme-toggle" onclick="toggleTheme()" title="เปลี่ยนธีม (Dark/Light)" aria-label="toggle dark mode">
+                    <div id="theme-toggle-knob">
+                        <i id="theme-icon" class="fas fa-sun text-yellow-500" style="font-size:11px"></i>
+                    </div>
+                </button>
+
                 <select id="lang-select" onchange="changeLanguage(this.value)" class="bg-slate-100 border-none rounded-xl py-2 px-2 md:px-3 text-xs font-black text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm">
                     <option value="th">🇹🇭 TH</option>
                     <option value="en">🇬🇧 EN</option>
@@ -374,9 +427,21 @@ const firebaseConfig = {
                 </div>
 
                 <div class="space-y-2.5 mt-5 text-xs font-bold text-slate-600 border-t border-slate-100 pt-4">
-                    <div class="flex justify-between items-center"><span>PM 10</span><span class="font-medium text-slate-400">32 mcg/m³</span><div class="w-2 h-2 rounded-full bg-emerald-500"></div></div>
-                    <div class="flex justify-between items-center"><span>O3 (Ozone)</span><span class="font-medium text-slate-400">14 ppb</span><div class="w-2 h-2 rounded-full bg-emerald-500"></div></div>
-                    <div class="flex justify-between items-center"><span>CO (Carbon)</span><span class="font-medium text-slate-400">0.4 ppm</span><div class="w-2 h-2 rounded-full bg-emerald-500"></div></div>
+                    <div class="flex justify-between items-center">
+                        <span>PM 10</span>
+                        <span id="real-pm10" class="font-medium text-slate-400">-- mcg/m³</span>
+                        <div id="real-pm10-dot" class="w-2 h-2 rounded-full bg-slate-300"></div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>O3 (Ozone)</span>
+                        <span id="real-o3" class="font-medium text-slate-400">-- μg/m³</span>
+                        <div id="real-o3-dot" class="w-2 h-2 rounded-full bg-slate-300"></div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>CO (Carbon)</span>
+                        <span id="real-co" class="font-medium text-slate-400">-- μg/m³</span>
+                        <div id="real-co-dot" class="w-2 h-2 rounded-full bg-slate-300"></div>
+                    </div>
                 </div>
                 <div class="text-[10px] text-slate-400 text-center mt-4 font-bold border-t border-slate-50 pt-2"><i class="fas fa-clock mr-1"></i><span class="lang-dash-time">อัปเดต:</span> <span id="current-time-widget">--</span></div>
             </div>
@@ -420,7 +485,7 @@ const firebaseConfig = {
                         <button id="btn-add-news" onclick="openNewsModal()" class="hidden bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition">
                             <i class="fas fa-plus mr-1.5"></i>เพิ่มประกาศข่าว
                         </button>
-                        <button onclick="switchView('air')"
+                        <button onclick="switchView('news-all')"
                             class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 lang-news-view-all">
                             ดูข่าวทั้งหมด <i class="fas fa-arrow-right text-[10px]"></i>
                         </button>
@@ -809,6 +874,36 @@ const firebaseConfig = {
             </div>
         </div>
     </div>
+
+    <!-- ====== หน้าข่าวทั้งหมด ====== -->
+    <main id="view-news-all" class="view-section max-w-7xl w-full mx-auto p-4 space-y-6 py-8">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+            <div>
+                <button onclick="switchView('home')" class="text-xs font-bold text-blue-600 hover:underline mb-2 flex items-center gap-1.5">
+                    <i class="fas fa-arrow-left text-[10px]"></i> กลับหน้าแรก
+                </button>
+                <h2 class="text-2xl font-black text-slate-900 tracking-tight"><i class="fas fa-newspaper text-blue-500 mr-2"></i><span class="lang-news-all-title">ข่าวสารและประกาศทั้งหมด</span></h2>
+                <p class="text-sm text-slate-400 font-medium mt-1 lang-news-all-desc">รวมข่าวสารคุณภาพอากาศและกิจกรรมโครงการ BREATHSAFE</p>
+            </div>
+            <button id="btn-add-news-all" onclick="openNewsModal()" class="hidden bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition">
+                <i class="fas fa-plus mr-1.5"></i>เพิ่มข่าวใหม่
+            </button>
+        </div>
+
+        <!-- Search bar -->
+        <div class="relative max-w-md">
+            <i class="fas fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+            <input id="news-all-search" type="text" placeholder="ค้นหาข่าว..." oninput="filterNewsAll(this.value)"
+                class="w-full bg-white border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm">
+        </div>
+
+        <!-- News grid — แสดงทั้งหมดไม่จำกัด -->
+        <div id="news-all-empty" class="hidden flex-col items-center justify-center py-24 text-center">
+            <div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4"><i class="fas fa-newspaper"></i></div>
+            <p class="text-slate-400 font-bold text-sm">ยังไม่มีข่าวสารในระบบ</p>
+        </div>
+        <div id="news-all-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+    </main>
 
     <main id="view-map" class="view-section max-w-7xl w-full mx-auto p-4 h-[82vh]">
         <div class="bg-white p-4 md:p-5 rounded-[2rem] shadow-sm border border-slate-200/80 h-full flex flex-col relative">
@@ -2967,20 +3062,26 @@ window.addEventListener('hashchange', () => {
         setTimeout(() => homeMiniMapInstance.invalidateSize(), 250);
     }
 
+    // render หน้าข่าวทั้งหมดเมื่อเข้าหน้านั้น
+    if (hash === 'news-all' && typeof window.renderNewsAll === 'function') {
+        window.renderNewsAll();
+    }
+
     // เมื่อเปลี่ยนหน้าแล้วให้เลื่อนสมูทกลับไปบนสุดเสมอ
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // แสดง/ซ่อน contact widget เฉพาะหน้าแรก
+    // แสดง/ซ่อน contact widget (แสดงทุกหน้ายกเว้น join/admin)
     const contactWidget = document.getElementById('contact-widget');
     const contactCard = document.getElementById('contact-card');
     const contactIcon = document.getElementById('contact-fab-icon');
     if (contactWidget) {
-        if (hash === 'home') {
-            contactWidget.classList.remove('hidden');
-        } else {
+        const hideOn = ['join'];
+        if (hideOn.includes(hash)) {
             contactWidget.classList.add('hidden');
             if (contactCard) contactCard.classList.add('hidden');
             if (contactIcon) contactIcon.className = 'fas fa-headset text-xl';
+        } else {
+            contactWidget.classList.remove('hidden');
         }
     }
 });
@@ -3344,122 +3445,237 @@ window.addEventListener('hashchange', () => {
     </button>
 </div>
 
-<!-- ====== Dust Loading Overlay (ใช้ระหว่าง ImgBB upload) ====== -->
-<div id="dust-loading-overlay" aria-hidden="true">
-    <div class="relative flex items-center justify-center" style="width:260px;height:260px">
-        <!-- Outer breathing rings -->
-        <div class="dust-ring" style="position:absolute"></div>
-        <div class="dust-ring dust-ring-2" style="position:absolute"></div>
-        <div class="dust-ring dust-ring-3" style="position:absolute"></div>
-        <!-- Extra glow ring -->
-        <div style="position:absolute;width:220px;height:220px;border-radius:50%;
-            border:1px solid rgba(99,102,241,0.2);
-            box-shadow:0 0 30px rgba(99,102,241,0.15),inset 0 0 30px rgba(99,102,241,0.05);
-            animation:dustPulse 3s ease-in-out infinite;"></div>
-        <!-- Core orb -->
-        <div class="dust-orb" style="position:relative;z-index:2">
-            <!-- PM2.5 icon inside orb -->
-            <div style="position:absolute;inset:6px;border-radius:50%;
-                display:flex;align-items:center;justify-content:center;
-                background:#0f172a;z-index:1">
-                <div style="text-align:center;line-height:1">
-                    <div style="font-size:9px;font-weight:900;color:#6366f1;letter-spacing:0.05em;font-family:monospace">PM</div>
-                    <div style="font-size:14px;font-weight:900;color:#fff;line-height:1">2.5</div>
-                </div>
-            </div>
-        </div>
-        <!-- Particles container -->
-        <div id="dust-particles-container" style="position:absolute;inset:0;pointer-events:none"></div>
-        <!-- Orbiting dots -->
-        <div id="dust-orbit-dots" style="position:absolute;inset:0;pointer-events:none"></div>
-    </div>
+
+<!-- ====== Bouncing Dust Balls Loading (ไม่ปิดกั้น UI) ====== -->
+<style>
+    #dust-loading-overlay {
+        display: none;
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 99999;
+        background: rgba(255,255,255,0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(99,102,241,0.15);
+        border-radius: 99px;
+        padding: 14px 28px;
+        box-shadow: 0 8px 32px rgba(99,102,241,0.18), 0 2px 8px rgba(0,0,0,0.08);
+        align-items: center;
+        gap: 10px;
+    }
+    html.dark #dust-loading-overlay {
+        background: rgba(15,23,42,0.88);
+        border-color: rgba(99,102,241,0.25);
+    }
+    .dust-ball {
+        width: 12px; height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        animation: dustBounce 0.9s ease-in-out infinite;
+    }
+    .dust-ball:nth-child(1){ background: #6366f1; animation-delay: 0s;    box-shadow: 0 0 8px #6366f180; }
+    .dust-ball:nth-child(2){ background: #3b82f6; animation-delay: 0.12s; box-shadow: 0 0 8px #3b82f680; }
+    .dust-ball:nth-child(3){ background: #a855f7; animation-delay: 0.24s; box-shadow: 0 0 8px #a855f780; }
+    .dust-ball:nth-child(4){ background: #06b6d4; animation-delay: 0.36s; box-shadow: 0 0 8px #06b6d480; }
+    .dust-ball:nth-child(5){ background: #f472b6; animation-delay: 0.48s; box-shadow: 0 0 8px #f472b680; }
+    @keyframes dustBounce {
+        0%,100% { transform: translateY(0) scale(1);    opacity: 0.5; }
+        30%      { transform: translateY(-18px) scale(1.15); opacity: 1; }
+        60%      { transform: translateY(3px) scale(0.92);  opacity: 0.7; }
+    }
+</style>
+<div id="dust-loading-overlay" role="status" aria-label="กำลังอัปโหลด">
+    <span class="dust-ball"></span>
+    <span class="dust-ball"></span>
+    <span class="dust-ball"></span>
+    <span class="dust-ball"></span>
+    <span class="dust-ball"></span>
 </div>
 
+
 <script>
-    // สร้างอนุภาคฝุ่นแบบ dynamic
-    (function spawnDustParticles() {
-        const container = document.getElementById('dust-particles-container');
-        if (!container) return;
-        const colors = ['#6366f1','#3b82f6','#a855f7','#06b6d4','#f472b6','#e0f2fe','#c7d2fe'];
-        for (let i = 0; i < 36; i++) {
-            const p = document.createElement('div');
-            const size = 1.5 + Math.random() * 4.5;
-            const angle = Math.random() * 360;
-            const radius = 20 + Math.random() * 90;
-            const startX = 130 + Math.cos(angle * Math.PI/180) * radius;
-            const startY = 130 + Math.sin(angle * Math.PI/180) * radius;
-            const dx = (Math.random() - 0.5) * 100;
-            const dur = 1.2 + Math.random() * 3;
-            const delay = Math.random() * 2.5;
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            p.className = 'dust-particle';
-            p.style.cssText = `
-                width:${size}px;height:${size}px;
-                left:${startX}px;top:${startY}px;
-                background:radial-gradient(circle,${color},transparent);
-                box-shadow:0 0 ${size*3}px ${color};
-                animation-duration:${dur}s;
-                animation-delay:${delay}s;
-                --dx:${dx}px;
-            `;
-            container.appendChild(p);
-        }
-    })();
-
-    // สร้าง orbiting dots รอบ orb
-    (function spawnOrbitDots() {
-        const container = document.getElementById('dust-orbit-dots');
-        if (!container) return;
-        const dotColors = ['#6366f1','#3b82f6','#a855f7','#06b6d4'];
-        [80, 105, 130].forEach((r, ri) => {
-            const dot = document.createElement('div');
-            const color = dotColors[ri % dotColors.length];
-            const size = 5 - ri;
-            const dur = 2 + ri * 0.7;
-            dot.style.cssText = `
-                position:absolute;
-                width:${size}px;height:${size}px;
-                border-radius:50%;
-                background:${color};
-                box-shadow:0 0 ${size*3}px ${color};
-                top:50%;left:50%;
-                transform-origin:0 0;
-                animation:orbitDot${ri} ${dur}s linear infinite;
-                margin-top:${-r}px;
-                margin-left:0px;
-            `;
-            // inject keyframe
-            if (!document.getElementById(`orbit-style-${ri}`)) {
-                const s = document.createElement('style');
-                s.id = `orbit-style-${ri}`;
-                s.textContent = `
-                    @keyframes orbitDot${ri} {
-                        from { transform: rotate(${ri*120}deg) translateX(${r}px); }
-                        to   { transform: rotate(${ri*120+360}deg) translateX(${r}px); }
-                    }`;
-                document.head.appendChild(s);
-            }
-            container.appendChild(dot);
-        });
-    })();
-
     // API สำหรับเปิด/ปิด dust loading
     window.showDustLoading = function() {
         const el = document.getElementById('dust-loading-overlay');
-        el.classList.add('active');
-        document.body.style.overflow = 'hidden';
+        el.style.display = 'flex';
+        el.style.opacity = '0';
+        requestAnimationFrame(() => {
+            el.style.transition = 'opacity 0.25s ease';
+            el.style.opacity = '1';
+        });
+        // ไม่ lock scroll — ให้ overlay ลอยด้านหน้าโดยไม่เปลี่ยนพื้นหลัง
     };
     window.hideDustLoading = function() {
         const el = document.getElementById('dust-loading-overlay');
-        // fade out ก่อนซ่อน
+        el.style.transition = 'opacity 0.3s ease';
         el.style.opacity = '0';
-        el.style.transition = 'opacity 0.4s ease';
-        setTimeout(() => {
-            el.classList.remove('active');
-            el.style.opacity = '';
-            el.style.transition = '';
-        }, 400);
+        setTimeout(() => { el.style.display = 'none'; el.style.transition = ''; }, 310);
         document.body.style.overflow = '';
+    };
+
+    // ============================================================
+    // Dark / Light Mode Toggle
+    // ============================================================
+    window.toggleTheme = function() {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('breathsafe_theme', isDark ? 'dark' : 'light');
+        const icon = document.getElementById('theme-icon');
+        if (icon) {
+            icon.className = isDark
+                ? 'fas fa-moon text-indigo-300'
+                : 'fas fa-sun text-yellow-500';
+        }
+    };
+    // โหลด theme ที่บันทึกไว้
+    (function initTheme() {
+        const saved = localStorage.getItem('breathsafe_theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) {
+            document.documentElement.classList.add('dark');
+            const icon = document.getElementById('theme-icon');
+            if (icon) icon.className = 'fas fa-moon text-indigo-300';
+        }
+    })();
+
+    // ============================================================
+    // Member Count จาก Firestore จริง — นับทุกครั้งที่มีการ auth
+    // ============================================================
+    window.updateJoinMemberCount = async function() {
+        const el = document.getElementById('join-member-count');
+        if (!el) return;
+        try {
+            if (window.fbDb && window.fbModules) {
+                const snap = await window.fbModules.getDocs(
+                    window.fbModules.collection(window.fbDb, 'users')
+                );
+                el.textContent = snap.size.toLocaleString();
+            } else { el.textContent = '0'; }
+        } catch (_) { el.textContent = '0'; }
+    };
+    // เรียกทันทีเมื่อโหลด
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(window.updateJoinMemberCount, 2000);
+    });
+
+    // ============================================================
+    // หน้าข่าวทั้งหมด (view-news-all)
+    // ============================================================
+    window.renderNewsAll = function() {
+        const list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+        const grid = document.getElementById('news-all-grid');
+        const empty = document.getElementById('news-all-empty');
+        if (!grid) return;
+        const isAdmin = window.isUserAdmin || false;
+        if (list.length === 0) {
+            grid.innerHTML = '';
+            empty?.classList.remove('hidden');
+            empty?.classList.add('flex');
+            return;
+        }
+        empty?.classList.add('hidden');
+        empty?.classList.remove('flex');
+        grid.innerHTML = list.map(n => `
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200/80 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer" onclick="viewFullNews('${n.id}')">
+                ${n.image ? `<div class="h-44 overflow-hidden"><img src="${n.image}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" onerror="this.parentElement.style.display='none'"></div>` : ''}
+                <div class="p-4 space-y-2">
+                    <div class="text-[10px] font-black text-blue-500 uppercase tracking-widest">${n.date || ''}</div>
+                    <h3 class="font-black text-slate-900 text-sm leading-snug line-clamp-2">${n.title || ''}</h3>
+                    <p class="text-xs text-slate-500 leading-relaxed line-clamp-3">${n.desc || ''}</p>
+                    ${isAdmin ? `<div class="flex gap-2 pt-2 border-t border-slate-100">
+                        <button onclick="event.stopPropagation();openNewsModal('${n.id}')" class="text-[10px] font-bold text-blue-600 hover:underline"><i class="fas fa-pen mr-1"></i>แก้ไข</button>
+                        <button onclick="event.stopPropagation();deleteNewsRecord('${n.id}',event)" class="text-[10px] font-bold text-rose-500 hover:underline"><i class="fas fa-trash mr-1"></i>ลบ</button>
+                    </div>` : ''}
+                </div>
+            </div>`).join('');
+
+        // แสดงปุ่มเพิ่มข่าวถ้าเป็น admin
+        const addBtn = document.getElementById('btn-add-news-all');
+        if (addBtn) addBtn.classList[isAdmin ? 'remove' : 'add']('hidden');
+    };
+
+    window.filterNewsAll = function(q) {
+        const list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+        const filtered = q.trim()
+            ? list.filter(n => (n.title+n.desc).toLowerCase().includes(q.toLowerCase()))
+            : list;
+        const grid = document.getElementById('news-all-grid');
+        if (!grid) return;
+        grid.innerHTML = filtered.map(n => `
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200/80 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer" onclick="viewFullNews('${n.id}')">
+                ${n.image ? `<div class="h-44 overflow-hidden"><img src="${n.image}" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.style.display='none'"></div>` : ''}
+                <div class="p-4 space-y-2">
+                    <div class="text-[10px] font-black text-blue-500 uppercase tracking-widest">${n.date || ''}</div>
+                    <h3 class="font-black text-slate-900 text-sm leading-snug line-clamp-2">${n.title || ''}</h3>
+                    <p class="text-xs text-slate-500 leading-relaxed line-clamp-3">${n.desc || ''}</p>
+                </div>
+            </div>`).join('');
+    };
+
+    // ============================================================
+    // PM10 / O3 / CO จาก Open-Meteo Air Quality API (จริง)
+    // ============================================================
+    async function fetchExtraAirQuality() {
+        try {
+            // ใช้พิกัดใจกลาง นครศรีธรรมราช
+            const res = await fetch(
+                'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=8.4304&longitude=99.9631&current=pm10,ozone,carbon_monoxide&timezone=auto',
+                { signal: AbortSignal.timeout(12000) }
+            );
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            const cur = data.current;
+            if (!cur) return;
+
+            // PM10
+            const pm10El  = document.getElementById('real-pm10');
+            const pm10Dot = document.getElementById('real-pm10-dot');
+            if (pm10El && typeof cur.pm10 === 'number') {
+                pm10El.textContent = Math.round(cur.pm10) + ' mcg/m³';
+                const color = cur.pm10 <= 50 ? '#10b981' : cur.pm10 <= 100 ? '#f59e0b' : '#ef4444';
+                if (pm10Dot) pm10Dot.style.backgroundColor = color;
+            }
+
+            // O3 (Ozone) — μg/m³
+            const o3El  = document.getElementById('real-o3');
+            const o3Dot = document.getElementById('real-o3-dot');
+            if (o3El && typeof cur.ozone === 'number') {
+                o3El.textContent = Math.round(cur.ozone) + ' μg/m³';
+                const color = cur.ozone <= 100 ? '#10b981' : cur.ozone <= 160 ? '#f59e0b' : '#ef4444';
+                if (o3Dot) o3Dot.style.backgroundColor = color;
+            }
+
+            // CO (Carbon Monoxide) — μg/m³
+            const coEl  = document.getElementById('real-co');
+            const coDot = document.getElementById('real-co-dot');
+            if (coEl && typeof cur.carbon_monoxide === 'number') {
+                coEl.textContent = Math.round(cur.carbon_monoxide) + ' μg/m³';
+                const color = cur.carbon_monoxide <= 4000 ? '#10b981' : cur.carbon_monoxide <= 9000 ? '#f59e0b' : '#ef4444';
+                if (coDot) coDot.style.backgroundColor = color;
+            }
+        } catch (e) {
+            console.warn('fetchExtraAirQuality:', e.message);
+        }
+    }
+    fetchExtraAirQuality();
+    setInterval(fetchExtraAirQuality, 900000); // อัปเดตทุก 15 นาที
+
+    // ============================================================
+    // Contact Widget fix — ให้ toggle ได้ทุก view
+    // ============================================================
+    window.toggleContactCard = function() {
+        const card = document.getElementById('contact-card');
+        const icon = document.getElementById('contact-fab-icon');
+        if (!card) return;
+        const isOpen = !card.classList.contains('hidden');
+        if (isOpen) {
+            card.classList.add('hidden');
+            if (icon) icon.className = 'fas fa-headset text-xl';
+        } else {
+            card.classList.remove('hidden');
+            if (icon) icon.className = 'fas fa-xmark text-xl';
+        }
     };
 </script>
 </body>
