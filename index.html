@@ -340,19 +340,74 @@
             </div>
         </div>
 
-        <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200/80">
-            <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                <h3 class="text-base font-black text-slate-900 tracking-tight lang-news-header"><i class="fas fa-newspaper text-blue-600 mr-2"></i>ข่าวสารประชาสัมพันธ์และกิจกรรมความเคลื่อนไหว</h3>
-                <button id="btn-add-news" onclick="openNewsModal()" class="hidden bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition"><i class="fas fa-plus mr-1.5"></i>เพิ่มประกาศข่าว</button>
-            </div>
-            
-            <div id="news-empty-state" class="hidden flex flex-col justify-center items-center py-16 text-center">
-                <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-2xl mb-3 shadow-inner"><i class="fas fa-folder-open"></i></div>
-                <p class="text-sm font-bold text-slate-400 lang-news-empty">ขณะนี้ยังไม่มีข่าวสารหรือประกาศแจ้งเตือนหน้าเว็บไซต์</p>
+        <!-- ===== News + Join Section (อัตราส่วน 3:1) ===== -->
+        <div class="flex flex-col lg:flex-row gap-5 items-stretch">
+
+            <!-- ── ข่าวสาร (3 ส่วน) ── -->
+            <div class="lg:w-3/4 bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200/80 flex flex-col">
+                <div class="flex justify-between items-center mb-5 border-b border-slate-100 pb-4 gap-3 flex-wrap">
+                    <h3 class="text-base font-black text-slate-900 tracking-tight lang-news-header"><i class="fas fa-newspaper text-blue-600 mr-2"></i>ข่าวสารประชาสัมพันธ์และกิจกรรมความเคลื่อนไหว</h3>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button id="btn-add-news" onclick="openNewsModal()" class="hidden bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition">
+                            <i class="fas fa-plus mr-1.5"></i>เพิ่มประกาศข่าว
+                        </button>
+                        <button onclick="switchView('air')"
+                            class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 lang-news-view-all">
+                            ดูข่าวทั้งหมด <i class="fas fa-arrow-right text-[10px]"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="news-empty-state" class="hidden flex-col justify-center items-center py-16 text-center flex-grow">
+                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-2xl mb-3 shadow-inner"><i class="fas fa-folder-open"></i></div>
+                    <p class="text-sm font-bold text-slate-400 lang-news-empty">ขณะนี้ยังไม่มีข่าวสารหรือประกาศแจ้งเตือนหน้าเว็บไซต์</p>
+                </div>
+
+                <div id="news-grid-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 flex-grow">
+                </div>
             </div>
 
-            <div id="news-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- ── เข้าร่วมการเปลี่ยนแปลง (1 ส่วน) ── -->
+            <div class="lg:w-1/4 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-[2rem] shadow-lg border border-indigo-500/30 flex flex-col items-center justify-between p-7 text-center relative overflow-hidden min-h-[260px]">
+                <!-- background decoration -->
+                <div class="absolute inset-0 pointer-events-none overflow-hidden">
+                    <div class="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+                    <div class="absolute -bottom-8 -left-8 w-32 h-32 bg-purple-400/20 rounded-full blur-xl"></div>
+                    <!-- floating dots -->
+                    <div class="absolute top-4 left-4 w-2 h-2 bg-white/30 rounded-full"></div>
+                    <div class="absolute top-10 right-8 w-1.5 h-1.5 bg-white/20 rounded-full"></div>
+                    <div class="absolute bottom-12 left-6 w-1 h-1 bg-white/25 rounded-full"></div>
                 </div>
+
+                <!-- icon -->
+                <div class="relative z-10 w-16 h-16 bg-white/15 backdrop-blur-sm border border-white/25 rounded-2xl flex items-center justify-center text-3xl shadow-inner mb-1">
+                    🌱
+                </div>
+
+                <!-- text -->
+                <div class="relative z-10 space-y-3 flex-grow flex flex-col justify-center py-2">
+                    <h3 class="text-base font-black text-white leading-snug lang-join-section-title">เข้าร่วมเป็นส่วนหนึ่งของการเปลี่ยนแปลง</h3>
+                    <p class="text-[11px] text-blue-100/90 font-medium leading-relaxed lang-join-section-desc">ร่วมกันเฝ้าระวังคุณภาพอากาศเพื่อชุมชนที่ดีขึ้น เป็นส่วนหนึ่งของเครือข่าย BREATHSAFE</p>
+                </div>
+
+                <!-- member count -->
+                <div id="join-member-count-block" class="relative z-10 bg-white/15 backdrop-blur-sm border border-white/20 rounded-2xl px-4 py-2.5 w-full mb-3">
+                    <div class="flex items-center justify-center gap-2">
+                        <i class="fas fa-users text-white/80 text-sm"></i>
+                        <div>
+                            <span id="join-member-count" class="text-xl font-black text-white">--</span>
+                            <p class="text-[9px] font-bold text-blue-200 uppercase tracking-widest lang-join-section-count">สมาชิกที่เข้าร่วมแล้ว</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CTA button -->
+                <button onclick="switchView('join')"
+                    class="relative z-10 w-full bg-white text-indigo-700 hover:bg-indigo-50 font-black py-3.5 rounded-2xl text-sm shadow-lg hover:shadow-xl transition-all active:scale-95 lang-join-section-btn">
+                    <i class="fas fa-user-plus mr-2"></i>เข้าร่วมเครือข่าย
+                </button>
+            </div>
+
         </div>
     </main>
 
@@ -688,8 +743,13 @@
 
     <main id="view-map" class="view-section max-w-7xl w-full mx-auto p-4 h-[82vh]">
         <div class="bg-white p-4 md:p-5 rounded-[2rem] shadow-sm border border-slate-200/80 h-full flex flex-col relative">
-            <div class="mb-3">
+            <div class="mb-3 flex items-center justify-between gap-3 flex-wrap">
                 <h2 class="text-sm font-black text-slate-900 uppercase tracking-wider lang-map-main-title"><i class="fas fa-map-location text-blue-500 mr-2"></i>ศูนย์ข้อมูลภูมิสารสนเทศแสดงพิกัดมลพิษสิ่งแวดล้อมทางอากาศ</h2>
+                <!-- ปุ่ม zoom to นครศรีธรรมราช -->
+                <button onclick="zoomToNakhonSiThammarat()"
+                    class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0 lang-map-zoom-nst">
+                    <i class="fas fa-location-crosshairs"></i>นครศรีธรรมราช
+                </button>
             </div>
             <div id="full-screen-gis-map" class="flex-grow rounded-2xl shadow-inner border border-slate-200 relative z-10 bg-slate-50"></div>
         </div>
@@ -1141,7 +1201,13 @@ const districtIssuesData = {
                 "auth-title": "ยืนยันตัวตนเข้าใช้งาน", "auth-subtitle": "ระบบสมาชิกเพื่อบันทึกและติดตามสถิติการรับมลพิษรายวัน", "auth-email": "บัญชีอีเมลผู้ใช้งาน (Email)", "auth-pass": "รหัสผ่านความปลอดภัย (Password)", "auth-btn-in": "ลงชื่อเข้าใช้ระบบ", "auth-btn-up": "สมัครเปิดบัญชีใหม่", "auth-or": "หรือล็อกอินผ่านช่องทาง", "auth-google": "เข้าสู่ระบบด้วยบัญชี Google",
                 "btn-analyze": "วิเคราะห์เชิงลึก", "btn-edit": "แก้ไข", "btn-delete": "ลบ",
                 "lbl-nickname": "ชื่อเล่น:", "lbl-age": "อายุ:", "lbl-years": "ปี", "lbl-grade": "ชั้น ม.:", "lbl-school": "โรงเรียน:",
-                "status-ex": "ดีมาก", "status-g": "ดี", "status-m": "ปานกลาง", "status-u": "เริ่มมีผลกระทบ", "status-h": "อันตราย"
+                "status-ex": "ดีมาก", "status-g": "ดี", "status-m": "ปานกลาง", "status-u": "เริ่มมีผลกระทบ", "status-h": "อันตราย",
+                "news-view-all": "ดูข่าวทั้งหมด",
+                "join-section-title": "เข้าร่วมเป็นส่วนหนึ่งของการเปลี่ยนแปลง",
+                "join-section-desc": "ร่วมกันเฝ้าระวังคุณภาพอากาศเพื่อชุมชนที่ดีขึ้น เป็นส่วนหนึ่งของเครือข่าย BREATHSAFE",
+                "join-section-btn": "<i class='fas fa-user-plus mr-2'></i>เข้าร่วมเครือข่าย",
+                "join-section-count": "สมาชิกที่เข้าร่วมแล้ว",
+                "map-zoom-nst": "<i class='fas fa-location-crosshairs mr-1.5'></i>นครศรีธรรมราช"
             },
             en: {
                 "nav-home": "<i class='fas fa-home mr-1.5'></i>Home", "nav-air": "<i class='fas fa-chart-pie mr-1.5'></i>Air Quality", "nav-map": "<i class='fas fa-map-marked-alt mr-1.5'></i>Pollution Map", "nav-about": "<i class='fas fa-id-card mr-1.5'></i>About Us", "nav-join": "<i class='fas fa-sign-in-alt mr-1.5'></i>Join Us",
@@ -1156,7 +1222,13 @@ const districtIssuesData = {
                 "auth-title": "User Identity Login", "auth-subtitle": "Member portal to log and track personal daily pollution intake exposure", "auth-email": "Email Address", "auth-pass": "Security Password", "auth-btn-in": "Sign In to Account", "auth-btn-up": "Sign Up Account", "auth-or": "Or Continue With", "auth-google": "Sign In with Google Account",
                 "btn-analyze": "Deep Analysis", "btn-edit": "Edit Data", "btn-delete": "Delete",
                 "lbl-nickname": "Nickname:", "lbl-age": "Age:", "lbl-years": "Y/O", "lbl-grade": "Grade:", "lbl-school": "School:",
-                "status-ex": "Excellent", "status-g": "Good", "status-m": "Moderate", "status-u": "Unhealthy", "status-h": "Hazardous"
+                "status-ex": "Excellent", "status-g": "Good", "status-m": "Moderate", "status-u": "Unhealthy", "status-h": "Hazardous",
+                "news-view-all": "View All News",
+                "join-section-title": "Be Part of the Change",
+                "join-section-desc": "Join our air quality monitoring network and help build a healthier community together with BREATHSAFE.",
+                "join-section-btn": "<i class='fas fa-user-plus mr-2'></i>Join the Network",
+                "join-section-count": "Members Joined",
+                "map-zoom-nst": "<i class='fas fa-location-crosshairs mr-1.5'></i>Nakhon Si Thammarat"
             }
         };
 
@@ -1561,6 +1633,38 @@ const districtIssuesData = {
                     </div>
                 `;
             });
+
+            // อัปเดตจำนวนสมาชิก
+            updateJoinMemberCount();
+        }
+
+        // ===== ซูมแผนที่กลับไปที่นครศรีธรรมราช =====
+        window.zoomToNakhonSiThammarat = function() {
+            const nstCenter = [8.4333, 99.9667];
+            if (!mainMapInstance) return;
+            mainMapInstance.flyTo(nstCenter, 9, {
+                animate: true,
+                duration: 1.4,
+                easeLinearity: 0.3
+            });
+        };
+
+        // ===== ดึงจำนวนสมาชิก (นับจาก Firestore users collection หรือ fallback) =====
+        async function updateJoinMemberCount() {
+            const countEl = document.getElementById('join-member-count');
+            if (!countEl) return;
+            try {
+                if (window.fbDb && window.fbModules) {
+                    // นับ documents ใน "users" collection (Firebase Auth users ที่บันทึก profile)
+                    // ถ้ายังไม่มี collection ให้ fallback เป็น 0
+                    const snap = await window.fbModules.getDocs(window.fbModules.collection(window.fbDb, 'users'));
+                    countEl.textContent = snap.size.toLocaleString();
+                } else {
+                    countEl.textContent = '0';
+                }
+            } catch (_) {
+                countEl.textContent = '0';
+            }
         }
 
         function renderAirQualityTable() {
@@ -1608,51 +1712,95 @@ const districtIssuesData = {
 
         // --- 9.2 ระบบจัดการภาพหน้าปก (Hero Section) ---
         // ------------------------------------------------------------------
-        // ImgBB Image Upload API
+        // ------------------------------------------------------------------
+        // ImgBB Image Upload API  —  key: af42a8978904ab02d636f80488841ed2
         // docs: https://api.imgbb.com/
         // ------------------------------------------------------------------
-        const IMGBB_API_KEY = 'a13d292b031ea791491a918a2d48ebdf08ab1f870abfa333db5ca2e7aad98f68';
+        const IMGBB_API_KEY = 'af42a8978904ab02d636f80488841ed2';
 
-        // แปลง base64 data URL เป็น base64 string ล้วนๆ (ตัด "data:image/jpeg;base64," ออก)
+        // แปลง base64 data URL → base64 string ล้วนๆ (ตัด "data:image/...;base64," ออก)
         function stripBase64Header(dataUrl) {
             return dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
         }
 
-        // อัปโหลดรูปไป ImgBB — คืนค่า display URL พร้อมใช้ใน <img src>
-        // name = ชื่อไฟล์ที่จะแสดงใน ImgBB album (เช่น "hero_cover", "news_1717000000")
+        // Compress base64 image ลดขนาดก่อน upload (ป้องกัน timeout / quota เกิน)
+        // maxWidth: ความกว้างสูงสุด, quality: 0-1
+        async function compressBase64Image(base64DataUrl, maxWidth = 1200, quality = 0.82) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => resolve(base64DataUrl); // fallback: ใช้ของเดิม
+                img.src = base64DataUrl;
+            });
+        }
+
+        // อัปโหลดรูปไป ImgBB — คืนค่า display_url พร้อมใช้ใน <img src> ทันที
+        // storagePath ใช้เป็นชื่อไฟล์ใน ImgBB เช่น "hero/cover.jpg" → "breathsafe_hero_cover"
         async function uploadImageToStorage(base64DataUrl, storagePath) {
-            // storagePath ใช้เป็น image name ใน ImgBB (เปลี่ยน / → _)
-            const imageName = storagePath.replace(/\//g, '_').replace(/\.jpg$/i, '');
+            const imageName = 'breathsafe_' + storagePath.replace(/\//g, '_').replace(/\.jpg$/i, '');
+
+            // บีบอัดก่อน upload ลดเวลาและป้องกัน timeout
+            const compressed = await compressBase64Image(base64DataUrl);
+
+            // ประมาณขนาดไฟล์ (base64 → bytes: len * 0.75)
+            const estimatedKB = Math.round(stripBase64Header(compressed).length * 0.75 / 1024);
+            console.log(`📤 Uploading to ImgBB: ${imageName} (~${estimatedKB} KB)`);
 
             const formData = new FormData();
             formData.append('key', IMGBB_API_KEY);
-            formData.append('image', stripBase64Header(base64DataUrl));
+            formData.append('image', stripBase64Header(compressed));
             formData.append('name', imageName);
 
-            const controller = new AbortController();
-            const timeoutId  = setTimeout(() => controller.abort(), 30000);
+            // Retry สูงสุด 3 ครั้ง กรณี network ชั่วคราวล้มเหลว
+            let lastError;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId  = setTimeout(() => controller.abort(), 40000); // 40s timeout
 
-            const res = await fetch('https://api.imgbb.com/1/image', {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
+                    const res = await fetch('https://api.imgbb.com/1/image', {
+                        method: 'POST',
+                        body:   formData,
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
 
-            if (!res.ok) throw new Error(`ImgBB HTTP error: ${res.status}`);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 
-            const json = await res.json();
-            if (!json.success) throw new Error(`ImgBB upload failed: ${json.error?.message || 'unknown error'}`);
+                    const json = await res.json();
 
-            // คืน display_url (direct image link ใช้ใน <img> ได้ทันที)
-            return json.data.display_url;
+                    if (!json.success) {
+                        const errMsg = json.error?.message || JSON.stringify(json.error) || 'Unknown ImgBB error';
+                        throw new Error(`ImgBB API: ${errMsg}`);
+                    }
+
+                    // คืน URL ที่ใช้ได้ทันที (display_url = direct link ไม่มี page wrapper)
+                    const url = json.data.display_url || json.data.url;
+                    console.log(`✅ ImgBB upload success (attempt ${attempt}): ${url}`);
+                    return url;
+
+                } catch (err) {
+                    lastError = err;
+                    console.warn(`⚠️ ImgBB attempt ${attempt}/3 failed:`, err.message);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt)); // backoff
+                }
+            }
+
+            // ล้มเหลวทุก attempt
+            throw new Error(`อัปโหลดรูปภาพไม่สำเร็จหลังลองซ้ำ 3 ครั้ง: ${lastError?.message}`);
         }
 
-        // ImgBB ฟรีไม่มี delete API — เก็บ function ไว้เพื่อ compatibility แต่ไม่ทำอะไร
-        async function deleteImageFromStorage(imageUrl) {
-            // ImgBB free tier ไม่รองรับ delete ผ่าน API
-            // รูปเก่าจะยังอยู่ใน ImgBB แต่ Firestore จะชี้ไปรูปใหม่แทน
-            console.info('deleteImageFromStorage: ImgBB ไม่รองรับ delete ผ่าน API (free tier)');
+        // ImgBB free tier ไม่มี delete API
+        async function deleteImageFromStorage(_imageUrl) {
+            console.info('ℹ️ ImgBB free tier ไม่รองรับ delete — รูปเก่ายังอยู่บน ImgBB แต่ Firestore ชี้ไปรูปใหม่แล้ว');
         }
 
         // ------------------------------------------------------------------
@@ -1689,7 +1837,7 @@ const districtIssuesData = {
             if (!base64Data) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่ได้เลือกรูปภาพ' : 'No image selected', text: currentLang === 'th' ? 'กรุณาเลือกรูปภาพหน้าปกก่อนบันทึก' : 'Please choose a cover image first.', confirmButtonColor: '#3b82f6' });
 
             // แสดง loading
-            Swal.fire({ title: currentLang === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...', text: currentLang === 'th' ? 'กำลังบันทึกรูปภาพไปยัง Firebase' : 'Saving image to Firebase Storage', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: currentLang === 'th' ? '📤 กำลังอัปโหลดรูปภาพ...' : '📤 Uploading image...', html: currentLang === 'th' ? '<p class="text-sm text-slate-500">กำลังส่งรูปไปยัง ImgBB<br><span class="text-xs text-slate-400">อาจใช้เวลา 5-15 วินาที ขึ้นอยู่กับขนาดไฟล์</span></p>' : '<p class="text-sm text-slate-500">Uploading to ImgBB CDN<br><span class="text-xs text-slate-400">May take 5-15 seconds depending on file size</span></p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
 
             try {
                 // อัปโหลดรูปไป Firebase Storage (path คงที่ — ทับรูปเก่าเสมอ)
@@ -2110,13 +2258,13 @@ const districtIssuesData = {
             if (!title || !desc || !date) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณากรอกข้อมูลให้ครบทุกช่อง' : 'Please fill in all fields.', confirmButtonColor: '#3b82f6' });
             if (!isBase64 && !existingUrl) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่มีรูปภาพ' : 'No image', text: currentLang === 'th' ? 'กรุณาอัปโหลดและครอปรูปภาพก่อนบันทึก' : 'Please upload and crop an image first.', confirmButtonColor: '#3b82f6' });
 
-            Swal.fire({ title: currentLang === 'th' ? 'กำลังบันทึก...' : 'Saving...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: currentLang === 'th' ? '📤 กำลังบันทึกข่าว...' : '📤 Saving news...', html: currentLang === 'th' ? '<p class="text-sm text-slate-500">กำลังอัปโหลดรูปภาพไปยัง ImgBB<br><span class="text-xs text-slate-400">กรุณารอสักครู่</span></p>' : '<p class="text-sm text-slate-500">Uploading image to ImgBB CDN</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
 
             try {
                 let imageUrl = existingUrl;
 
                 if (isBase64) {
-                    // อัปโหลดรูปใหม่ไป Firebase Storage
+                    // อัปโหลดรูปใหม่ไป ImgBB
                     const timestamp = Date.now();
                     const storagePath = `news/${id || timestamp}.jpg`;
                     imageUrl = await uploadImageToStorage(newBase64, storagePath);
@@ -2302,7 +2450,7 @@ const districtIssuesData = {
 
             if (!name) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณาระบุชื่อ-นามสกุล' : 'Please provide a name.', confirmButtonColor: '#4f46e5' });
 
-            Swal.fire({ title: currentLang === 'th' ? 'กำลังบันทึก...' : 'Saving...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: currentLang === 'th' ? '📤 กำลังบันทึกสมาชิก...' : '📤 Saving member...', html: currentLang === 'th' ? '<p class="text-sm text-slate-500">กำลังอัปโหลดรูปโปรไฟล์ไปยัง ImgBB<br><span class="text-xs text-slate-400">กรุณารอสักครู่</span></p>' : '<p class="text-sm text-slate-500">Uploading profile photo to ImgBB CDN</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
 
             try {
                 let imageUrl = existingUrl;
@@ -2461,13 +2609,38 @@ const districtIssuesData = {
 
             if (!email || !pw || pw !== confirm) return;
 
-            Swal.fire({ title: 'กำลังสร้างบัญชี...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: '🔐 กำลังสร้างบัญชี...', html: '<p class="text-sm text-slate-500">กำลังเชื่อมต่อ Firebase Auth</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
 
             try {
                 if (window.fbAuth && window.fbModules) {
                     const cred = await window.fbModules.createUserWithEmailAndPassword(window.fbAuth, email, pw);
-                    Swal.fire({ icon: 'success', title: 'สมัครสมาชิกสำเร็จ! 🎉', html: `<p class="text-sm text-slate-600">ยินดีต้อนรับสู่ระบบ BREATHSAFE<br><b>${email}</b></p>`, timer: 2500, showConfirmButton: false });
+
+                    // บันทึก user profile ลง Firestore "users" collection
+                    // เพื่อให้ member count (updateJoinMemberCount) นับได้จริง
+                    try {
+                        await window.fbModules.setDoc(
+                            window.fbModules.doc(window.fbDb, 'users', cred.user.uid),
+                            {
+                                email: cred.user.email,
+                                displayName: cred.user.displayName || null,
+                                joinedAt: Date.now(),
+                                provider: 'email'
+                            }
+                        );
+                    } catch (dbErr) {
+                        console.warn('บันทึก user profile ไม่สำเร็จ (ไม่กระทบการ login):', dbErr.message);
+                    }
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'สมัครสมาชิกสำเร็จ! 🎉',
+                        html: `<p class="text-sm text-slate-600">ยินดีต้อนรับสู่เครือข่าย BREATHSAFE<br><b class="text-blue-600">${email}</b></p>`,
+                        timer: 2500, showConfirmButton: false
+                    });
                     setLoginState(false, cred.user);
+
+                    // รีเฟรช member count ทันที
+                    updateJoinMemberCount();
                 } else {
                     Swal.fire({ icon: 'info', title: 'โหมดออฟไลน์', text: 'ยังไม่ได้ตั้งค่า Firebase กรุณาเปิดใช้งาน Firebase ก่อน', confirmButtonColor: '#3b82f6' });
                 }
@@ -2538,8 +2711,23 @@ const districtIssuesData = {
             if (window.fbAuth && window.googleProvider) {
                 try {
                     const result = await window.fbModules.signInWithPopup(window.fbAuth, window.googleProvider);
-                    const isAdmin = result.user.email === "admin@breathsafe.app";
-                    setLoginState(isAdmin, result.user);
+                    const user = result.user;
+                    const isAdmin = user.email === "admin@breathsafe.app";
+
+                    // บันทึก/อัปเดต user profile ลง Firestore (upsert — setDoc จะ merge ถ้ามีอยู่แล้ว)
+                    if (window.fbDb) {
+                        try {
+                            await window.fbModules.setDoc(
+                                window.fbModules.doc(window.fbDb, 'users', user.uid),
+                                { email: user.email, displayName: user.displayName, photoURL: user.photoURL, lastLoginAt: Date.now(), provider: 'google' },
+                                { merge: true }
+                            );
+                            updateJoinMemberCount();
+                        } catch (dbErr) { console.warn('user profile upsert:', dbErr.message); }
+                    }
+
+                    Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบสำเร็จ 🎉' : 'Signed In 🎉', html: `<p class="text-sm text-slate-600">${currentLang === 'th' ? 'ยินดีต้อนรับ' : 'Welcome'} <b class="text-blue-600">${user.displayName || user.email}</b></p>`, timer: 1800, showConfirmButton: false });
+                    setLoginState(isAdmin, user);
                 } catch (error) {
                     console.error("Google Auth Error:", error);
                     Swal.fire({ icon: 'error', title: 'Google Sign-In Failed', text: error.message, confirmButtonColor: '#ef4444' });
