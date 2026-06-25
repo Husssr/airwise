@@ -1,0 +1,222 @@
+        body { font-family: 'Sarabun', 'Inter', sans-serif; overflow-x: hidden; }
+        .view-section { display: none; opacity: 0; transform: translateY(15px); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .view-section.active { display: block; opacity: 1; transform: translateY(0); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background-color: transparent; }
+
+        /* ============================================================
+           DARK MODE — smooth transition ทุก element
+           ============================================================ */
+        *, *::before, *::after {
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease, box-shadow 0.3s ease;
+        }
+        /* ยกเว้น element ที่มี transition ของตัวเองอยู่แล้ว */
+        .view-section, #char-svg, .dust-particle, .dust-ring, .dust-orb { transition: unset; }
+        .view-section { transition: opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1); }
+
+        html.dark body { background-color: #0f172a; color: #e2e8f0; }
+        html.dark .bg-white { background-color: #1e293b !important; }
+        html.dark .bg-slate-50, html.dark .bg-slate-50\/80 { background-color: #162032 !important; }
+        html.dark .bg-slate-100 { background-color: #1e293b !important; }
+        html.dark .text-slate-900 { color: #f1f5f9 !important; }
+        html.dark .text-slate-800 { color: #e2e8f0 !important; }
+        html.dark .text-slate-700 { color: #cbd5e1 !important; }
+        html.dark .text-slate-600 { color: #94a3b8 !important; }
+        html.dark .text-slate-500 { color: #64748b !important; }
+        html.dark .border-slate-200, html.dark .border-slate-200\/80, html.dark .border-slate-100 { border-color: #334155 !important; }
+        html.dark header { background-color: #0f172a !important; border-bottom: 1px solid #1e293b; }
+        html.dark #mobile-menu-dropdown { background-color: #1e293b !important; }
+        html.dark .hover\:bg-slate-50:hover { background-color: #1e293b !important; }
+        html.dark .hover\:bg-blue-50:hover { background-color: #1e3a5f !important; }
+        html.dark input, html.dark textarea, html.dark select { background-color: #1e293b !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+        html.dark .shadow-sm, html.dark .shadow-md, html.dark .shadow-lg { box-shadow: 0 2px 12px rgba(0,0,0,0.5) !important; }
+        html.dark #dust-loading-overlay { background: radial-gradient(ellipse at center, rgba(2,8,23,0.99) 0%, rgba(0,0,0,1) 100%); }
+
+        /* Dark mode toggle button */
+        #theme-toggle {
+            position: relative; width: 52px; height: 28px;
+            background: #e2e8f0; border-radius: 99px;
+            cursor: pointer; border: none; outline: none;
+            transition: background 0.35s ease; flex-shrink: 0;
+        }
+        html.dark #theme-toggle { background: #334155; }
+        #theme-toggle-knob {
+            position: absolute; top: 3px; left: 3px;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: white; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), background 0.3s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        html.dark #theme-toggle-knob { transform: translateX(24px); background: #1e293b; }
+
+        /* ============================================================
+           DUST LOADING OVERLAY — Professional particle upload animation
+           ============================================================ */
+        #dust-loading-overlay {
+            position: fixed; inset: 0; z-index: 99999;
+            display: none; align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at center, rgba(15,23,42,0.97) 0%, rgba(2,8,23,0.99) 100%);
+            backdrop-filter: blur(12px);
+        }
+        #dust-loading-overlay.active { display: flex; }
+
+        /* วงกลมกลาง */
+        .dust-orb {
+            width: 90px; height: 90px; border-radius: 50%; position: relative;
+            background: conic-gradient(from 0deg, #3b82f6, #6366f1, #a855f7, #06b6d4, #3b82f6);
+            animation: dustOrbSpin 2s linear infinite;
+            box-shadow: 0 0 40px rgba(99,102,241,0.6), 0 0 80px rgba(99,102,241,0.3);
+        }
+        .dust-orb::before {
+            content: ''; position: absolute; inset: 6px; border-radius: 50%;
+            background: #0f172a;
+        }
+        .dust-orb::after {
+            content: ''; position: absolute; inset: 18px; border-radius: 50%;
+            background: conic-gradient(from 180deg, #6366f1, #3b82f6, #06b6d4, #6366f1);
+            animation: dustOrbSpin 1.4s linear infinite reverse;
+            box-shadow: inset 0 0 20px rgba(99,102,241,0.5);
+        }
+
+        /* ฝุ่นลอย */
+        .dust-particle {
+            position: absolute; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.9), transparent);
+            animation: dustFloat linear infinite;
+            pointer-events: none;
+        }
+
+        /* progress ring รอบ orb */
+        .dust-ring {
+            position: absolute; width: 130px; height: 130px;
+            border-radius: 50%; border: 2px solid transparent;
+            border-top-color: #6366f1; border-right-color: #3b82f6;
+            animation: dustOrbSpin 1.8s ease-in-out infinite;
+        }
+        .dust-ring-2 {
+            width: 160px; height: 160px;
+            border-top-color: #a855f7; border-right-color: transparent;
+            animation-duration: 2.8s; animation-direction: reverse;
+        }
+        .dust-ring-3 {
+            width: 195px; height: 195px;
+            border-top-color: #06b6d4; border-right-color: transparent;
+            animation-duration: 4s;
+        }
+
+        @keyframes dustOrbSpin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+        @keyframes dustFloat {
+            0%   { transform: translateY(0) translateX(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-120px) translateX(var(--dx, 20px)) scale(0); opacity: 0; }
+        }
+        @keyframes dustPulse {
+            0%,100% { opacity: 0.4; transform: scale(1); }
+            50%     { opacity: 1;   transform: scale(1.08); }
+        }
+
+        /* ===== 3D Character idle animations ===== */
+        @keyframes charFloat {
+            0%, 100% { transform: translateY(0px); }
+            50%       { transform: translateY(-7px); }
+        }
+        @keyframes charBlink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            94%           { transform: scaleY(0.05); }
+        }
+        @keyframes charBobHead {
+            0%, 100% { transform: rotate(0deg); }
+            25%       { transform: rotate(2deg); }
+            75%       { transform: rotate(-2deg); }
+        }
+        #char-svg {
+            animation: charFloat 3.2s ease-in-out infinite;
+            transform-origin: bottom center;
+        }
+        /* กระพริบตาอัตโนมัติ — ใช้ CSS กับ group ตาทั้งคู่ผ่าน transform */
+        #char-svg .eye-group {
+            animation: charBlink 4s ease-in-out infinite;
+            transform-origin: center 55px;
+        }
+        
+        /* สปินเนอร์ตอนกำลังประมวลผลเปลี่ยนผ่านหน้าจอ */
+        .loader-ring {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #3b82f6;
+            width: 45px; height: 45px;
+            animation: spin-anim 0.8s linear infinite;
+        }
+        @keyframes spin-anim { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* --- [ส่วนเสริม CSS สำหรับปรับแต่งแผนที่ให้ดูมืออาชีพ] --- */
+/* กำหนดความสูงของแผนที่ให้ดูเต็ม */
+#map-view {
+    height: calc(100vh - 150px);
+    position: relative;
+}
+
+/* ปรับแต่งหน้าตา Pop-up ของ Leaflet ให้ดูโมเดิร์นและเข้ากับ Tailwind CSS */
+.custom-leaflet-popup .leaflet-popup-content-wrapper {
+    background: #ffffff;
+    color: #334155; /* slate-700 */
+    border-radius: 16px;
+    padding: 2px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Tailwind shadow-lg */
+    font-family: 'Inter', 'Noto Sans Thai', sans-serif;
+}
+.custom-leaflet-popup .leaflet-popup-tip {
+    background: #ffffff;
+}
+.custom-leaflet-popup .leaflet-popup-content {
+    margin: 12px;
+}
+/* ปรับปรุงปุ่มควบคุม Zoom ให้ดูคลีนขึ้น */
+.leaflet-control-zoom-in, .leaflet-control-zoom-out {
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    margin-bottom: 3px;
+}
+/* ====== Crop Modal Styles ====== */
+#crop-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.75);
+    backdrop-filter: blur(6px);
+    z-index: 99999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+}
+#crop-modal-box {
+    background: #fff;
+    border-radius: 28px;
+    width: 100%; max-width: 520px;
+    box-shadow: 0 32px 64px -12px rgba(0,0,0,0.4);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    max-height: 92vh;
+}
+#crop-image-area {
+    position: relative;
+    background: #0f172a;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+#crop-image-area img {
+    display: block;
+    max-width: 100%;
+    max-height: 360px;
+    width: 100%;
+    object-fit: contain;
+}
+/* Cropper circle overlay สำหรับโหมด about */
+.crop-mode-circle .cropper-view-box,
+.crop-mode-circle .cropper-face {
+    border-radius: 50%;
+}
+.cropper-view-box { outline-color: #3b82f6; }
+.cropper-point { background: #3b82f6; }
+.cropper-line { background: #3b82f6; }

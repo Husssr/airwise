@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BREATHSAFE - ระบบรายงานคุณภาพอากาศและภูมิสารสนเทศ นครศรีธรรมราช</title>
+
+    <!-- ═══ External CDN Libraries ═══ -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- ═══ Firebase (ES Module — ต้องโหลดก่อนไฟล์อื่น) ═══ -->
+    <script type="module" src="firebase-init.js"></script>
+
+    <!-- ═══ Stylesheet ═══ -->
+    <link rel="stylesheet" href="style.css">
+</head>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col text-slate-800 antialiased">
+
+    
+
+    <header class="bg-white shadow-sm sticky top-0 z-[999] w-full">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-20">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchView('home')">
+                <div class="h-12 w-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                    <i class="fas fa-wind text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold text-slate-800 tracking-tight">BREATHSAFE</h1>
+                    <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase">GIS & AIR QUALITY</p>
+                </div>
+            </div>
+
+            <div class="hidden lg:flex items-center space-x-1">
+                <button id="nav-home" onclick="switchView('home')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-home">หน้าแรก</button>
+                <button id="nav-air" onclick="switchView('air')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-air">ข้อมูลคุณภาพอากาศ</button>
+                <button id="nav-map" onclick="switchView('map')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-map">แผนที่มลพิษ</button>
+                <button id="nav-about" onclick="switchView('about')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-about">คณะผู้จัดทำ</button>
+                <button id="nav-join" onclick="switchView('join')" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors rounded-xl lang-nav-join">เข้าสู่ระบบ</button>
+            </div>
+
+            <div class="flex items-center space-x-2 md:space-x-3">
+                <span id="admin-badge" class="hidden bg-rose-50 text-rose-600 text-[10px] px-2.5 py-1 rounded-lg font-extrabold uppercase tracking-widest border border-rose-200 animate-pulse"><i class="fas fa-user-crown mr-1"></i>Admin</span>
+
+                <!-- Dark/Light mode toggle -->
+                <button id="theme-toggle" onclick="toggleTheme()" title="เปลี่ยนธีม (Dark/Light)" aria-label="toggle dark mode">
+                    <div id="theme-toggle-knob">
+                        <i id="theme-icon" class="fas fa-sun text-yellow-500" style="font-size:11px"></i>
+                    </div>
+                </button>
+
+                <select id="lang-select" onchange="changeLanguage(this.value)" class="bg-slate-100 border-none rounded-xl py-2 px-2 md:px-3 text-xs font-black text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm">
+                    <option value="th">🇹🇭 TH</option>
+                    <option value="en">🇬🇧 EN</option>
+                </select>
+                
+                <div class="h-11 w-11 bg-white rounded-xl overflow-hidden border border-slate-200 p-1 shadow-sm flex items-center justify-center group hover:rotate-6 transition duration-300" title="โรงเรียนเตรียมอุดมศึกษาภาคใต้">
+                    <img src="https://img1.pic.in.th/images/images-14289da2ee117bf4d.jpg" alt="ตราสัญลักษณ์โรงเรียนเตรียมอุดมศึกษาภาคใต้" class="h-full w-full object-contain">
+                </div>
+
+                <button id="mobile-menu-btn" onclick="toggleMobileMenu()" class="lg:hidden text-slate-600 hover:text-blue-600 text-2xl p-2 ml-1 focus:outline-none">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backdrop สำหรับเมนูมือถือ -->
+    <div id="mobile-menu-backdrop" onclick="toggleMobileMenu()" class="hidden lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[1000] transition-opacity duration-300 opacity-0"></div>
+
+    <!-- เมนูมือถือแบบ Bottom Sheet -->
+    <div id="mobile-menu-dropdown" class="hidden lg:hidden fixed bottom-0 left-0 w-full bg-white rounded-t-[2rem] shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.25)] z-[1001] p-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-1.5 transform translate-y-full transition-transform duration-300 ease-out max-h-[80vh] overflow-y-auto custom-scrollbar">
+        <div class="w-10 h-1.5 bg-slate-200 rounded-full mx-auto mb-2"></div>
+        <div class="flex items-center justify-between px-2 pb-2 mb-1 border-b border-slate-100">
+            <div class="flex items-center space-x-2">
+                <div class="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-200">
+                    <i class="fas fa-wind text-white text-sm"></i>
+                </div>
+                <span class="font-extrabold text-slate-800 text-sm tracking-tight">BREATHSAFE</span>
+            </div>
+            <button onclick="toggleMobileMenu()" class="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"><i class="fas fa-xmark"></i></button>
+        </div>
+        <button onclick="switchView('home'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-home"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-house"></i></span> หน้าแรก</button>
+        <button onclick="switchView('air'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-air"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-chart-pie"></i></span> ข้อมูลคุณภาพอากาศ</button>
+        <button onclick="switchView('map'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-map"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-map-location-dot"></i></span> แผนที่มลพิษ</button>
+        <button onclick="switchView('about'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-about"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-users"></i></span> คณะผู้จัดทำ</button>
+        <button onclick="switchView('join'); toggleMobileMenu();" class="w-full flex items-center text-left px-4 py-3.5 rounded-2xl font-bold text-slate-700 hover:bg-blue-50 active:scale-[0.98] transition lang-nav-join"><span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-3 text-base"><i class="fas fa-right-to-bracket"></i></span> เข้าสู่ระบบ</button>
+    </div>
+</header>
+
+    <main id="view-home" class="view-section active max-w-7xl w-full mx-auto p-4 space-y-6">
+        
+        <div id="hero-section" class="relative bg-slate-900 rounded-[2rem] p-8 md:p-16 overflow-hidden bg-cover bg-center flex flex-col justify-center min-h-[460px] shadow-md border border-slate-200/60 transition-all duration-500" style="background-image: linear-gradient(to right, rgba(255,255,255,0.96) 35%, rgba(255,255,255,0.2)), url('https://images.unsplash.com/photo-1596422846543-75c6fc197f07?q=80&w=1200&auto=format&fit=crop');">
+            <button id="btn-edit-hero" onclick="openHeroModal()" class="hidden absolute top-6 right-6 bg-white/90 backdrop-blur border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:bg-white z-20 transition"><i class="fas fa-edit mr-1.5 text-blue-600"></i><span class="lang-edit-hero">เปลี่ยนภาพหน้าปก</span></button>
+            
+            <div class="relative z-10 max-w-xl">
+                <div class="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full inline-block mb-4 uppercase tracking-widest shadow-md shadow-blue-500/30 lang-hero-badge">Nakhon Si Thammarat PM2.5 Watch</div>
+                <h1 class="text-3xl md:text-5xl font-black text-slate-900 leading-tight mb-4 tracking-tight lang-hero-title">
+                    อากาศบริสุทธิ์<br><span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">เพื่อชุมชนสุขภาพดี</span>
+                </h1>
+                <p class="text-slate-600 text-sm font-medium mb-8 leading-relaxed lang-hero-desc">
+                    นวัตกรรมระบบฐานข้อมูลภูมิสารสนเทศและการรายงานสถิติฝุ่นละอองขนาดเล็กเรียลไทม์ ครอบคลุมพื้นที่ทั้ง 23 อำเภอ ขับเคลื่อนการเฝ้าระวังโดยโรงเรียนเตรียมอุดมศึกษาภาคใต้
+                </p>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="switchView('air')" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 hover:shadow-lg transition lang-hero-btn1"><i class="fas fa-chart-line mr-2"></i>ตรวจสอบรายอำเภอ</button>
+                    <button onclick="switchView('map')" class="bg-white text-slate-700 border border-slate-200 px-6 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm hover:bg-slate-50 transition lang-hero-btn2"><i class="fas fa-map-marked-alt mr-2"></i>เปิดแผนที่ขนาดใหญ่</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/80 flex flex-col justify-between">
+                <div>
+                    <h3 class="font-extrabold text-slate-900 text-xs uppercase tracking-wider mb-4 lang-dash-status"><i class="fas fa-gauge-high text-blue-500 mr-2"></i>สถานการณ์ภาพรวมจังหวัด</h3>
+                    <div id="overall-card-bg" class="bg-emerald-500 text-white rounded-2xl p-4 flex justify-between items-center shadow-inner relative overflow-hidden transition-colors duration-500">
+                        <i class="fas fa-leaf absolute -right-3 -bottom-3 text-6xl opacity-15"></i>
+                        <div class="relative z-10">
+                            <div class="text-[9px] font-bold tracking-widest uppercase opacity-80 mb-0.5 lang-dash-aqi">ค่าเฉลี่ยฝุ่นละออง</div>
+                            <div class="text-4xl font-black tracking-tighter" id="overall-pm25-val">--</div>
+                            <div class="text-[9px] font-bold opacity-75">micrograms / m³</div>
+                        </div>
+                        <div class="text-right relative z-10">
+                            <div class="text-sm font-black tracking-tight" id="overall-status-text">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2.5 mt-5 text-xs font-bold text-slate-600 border-t border-slate-100 pt-4">
+                    <div class="flex justify-between items-center">
+                        <span>PM 10</span>
+                        <span id="real-pm10" class="font-medium text-slate-400">-- mcg/m³</span>
+                        <div id="real-pm10-dot" class="w-2 h-2 rounded-full bg-slate-300"></div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>O3 (Ozone)</span>
+                        <span id="real-o3" class="font-medium text-slate-400">-- μg/m³</span>
+                        <div id="real-o3-dot" class="w-2 h-2 rounded-full bg-slate-300"></div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>CO (Carbon)</span>
+                        <span id="real-co" class="font-medium text-slate-400">-- μg/m³</span>
+                        <div id="real-co-dot" class="w-2 h-2 rounded-full bg-slate-300"></div>
+                    </div>
+                </div>
+                <div class="text-[10px] text-slate-400 text-center mt-4 font-bold border-t border-slate-50 pt-2"><i class="fas fa-clock mr-1"></i><span class="lang-dash-time">อัปเดต:</span> <span id="current-time-widget">--</span></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200/80 col-span-1 lg:col-span-2 flex flex-col">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-extrabold text-slate-900 text-xs uppercase tracking-wider lang-dash-map"><i class="fas fa-map-location-dot text-blue-500 mr-2"></i>พิกัดความหนาแน่นเชิงพื้นที่</h3>
+                    <button onclick="switchView('map')" class="text-blue-600 text-[10px] font-bold bg-blue-50 px-2.5 py-1 rounded-lg hover:bg-blue-100 transition lang-dash-map-btn">ขยายแผนที่</button>
+                </div>
+                <div id="home-mini-map" class="w-full rounded-2xl border border-slate-200 bg-slate-100 flex-grow min-h-[220px] z-10"></div>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/80 flex flex-col justify-between">
+                <div>
+                    <h3 class="font-extrabold text-slate-900 text-xs uppercase tracking-wider mb-3 lang-dash-top"><i class="fas fa-triangle-exclamation text-amber-500 mr-2"></i>พื้นที่เฝ้าระวังค่าฝุ่นสูงสุด</h3>
+                    <div class="space-y-2.5 text-xs font-semibold" id="top-risk-container">
+                        </div>
+                </div>
+                <div class="bg-slate-900 text-white p-3.5 rounded-2xl mt-4 flex items-center justify-between overflow-hidden relative">
+                    <i id="real-weather-icon" class="fas fa-cloud-sun-rain absolute -right-2 -bottom-2 text-5xl text-slate-800 opacity-40"></i>
+                    <div class="relative z-10">
+                        <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider lang-dash-weather">สภาพอากาศปัจจุบัน</div>
+                        <div id="real-temp" class="text-xl font-black">-- °C</div>
+                    </div>
+                    <div class="text-right text-[10px] font-bold text-slate-400 relative z-10">
+                        <div><i class="fas fa-droplet text-blue-400 mr-1"></i> <span id="real-humid">--</span></div>
+                        <div><i class="fas fa-wind text-slate-400 mr-1"></i> <span id="real-wind">--</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== News + Join Section (อัตราส่วน 3:1) ===== -->
+        <div class="flex flex-col lg:flex-row gap-5 items-stretch">
+
+            <!-- ── ข่าวสาร (3 ส่วน) ── -->
+            <div class="lg:w-3/4 bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200/80 flex flex-col">
+                <div class="flex justify-between items-center mb-5 border-b border-slate-100 pb-4 gap-3 flex-wrap">
+                    <h3 class="text-base font-black text-slate-900 tracking-tight lang-news-header"><i class="fas fa-newspaper text-blue-600 mr-2"></i>ข่าวสารประชาสัมพันธ์และกิจกรรมความเคลื่อนไหว</h3>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button id="btn-add-news" onclick="openNewsModal()" class="hidden bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition">
+                            <i class="fas fa-plus mr-1.5"></i>เพิ่มประกาศข่าว
+                        </button>
+                        <button onclick="switchView('news-all')"
+                            class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 lang-news-view-all">
+                            ดูข่าวทั้งหมด <i class="fas fa-arrow-right text-[10px]"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="news-empty-state" class="hidden flex-col justify-center items-center py-16 text-center flex-grow">
+                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-2xl mb-3 shadow-inner"><i class="fas fa-folder-open"></i></div>
+                    <p class="text-sm font-bold text-slate-400 lang-news-empty">ขณะนี้ยังไม่มีข่าวสารหรือประกาศแจ้งเตือนหน้าเว็บไซต์</p>
+                </div>
+
+                <div id="news-grid-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 flex-grow">
+                </div>
+            </div>
+
+            <!-- ── เข้าร่วมการเปลี่ยนแปลง (1 ส่วน) ── -->
+            <div class="lg:w-1/4 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-[2rem] shadow-lg border border-indigo-500/30 flex flex-col items-center justify-between p-7 text-center relative overflow-hidden min-h-[260px]">
+                <!-- background decoration -->
+                <div class="absolute inset-0 pointer-events-none overflow-hidden">
+                    <div class="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+                    <div class="absolute -bottom-8 -left-8 w-32 h-32 bg-purple-400/20 rounded-full blur-xl"></div>
+                    <!-- floating dots -->
+                    <div class="absolute top-4 left-4 w-2 h-2 bg-white/30 rounded-full"></div>
+                    <div class="absolute top-10 right-8 w-1.5 h-1.5 bg-white/20 rounded-full"></div>
+                    <div class="absolute bottom-12 left-6 w-1 h-1 bg-white/25 rounded-full"></div>
+                </div>
+
+                <!-- icon -->
+                <div class="relative z-10 w-16 h-16 bg-white/15 backdrop-blur-sm border border-white/25 rounded-2xl flex items-center justify-center text-3xl shadow-inner mb-1">
+                    🌱
+                </div>
+
+                <!-- text -->
+                <div class="relative z-10 space-y-3 flex-grow flex flex-col justify-center py-2">
+                    <h3 class="text-base font-black text-white leading-snug lang-join-section-title">เข้าร่วมเป็นส่วนหนึ่งของการเปลี่ยนแปลง</h3>
+                    <p class="text-[11px] text-blue-100/90 font-medium leading-relaxed lang-join-section-desc">ร่วมกันเฝ้าระวังคุณภาพอากาศเพื่อชุมชนที่ดีขึ้น เป็นส่วนหนึ่งของเครือข่าย BREATHSAFE</p>
+                </div>
+
+                <!-- member count -->
+                <div id="join-member-count-block" class="relative z-10 bg-white/15 backdrop-blur-sm border border-white/20 rounded-2xl px-4 py-2.5 w-full mb-3">
+                    <div class="flex items-center justify-center gap-2">
+                        <i class="fas fa-users text-white/80 text-sm"></i>
+                        <div>
+                            <span id="join-member-count" class="text-xl font-black text-white">--</span>
+                            <p class="text-[9px] font-bold text-blue-200 uppercase tracking-widest lang-join-section-count">สมาชิกที่เข้าร่วมแล้ว</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CTA button -->
+                <button onclick="switchView('join')"
+                    class="relative z-10 w-full bg-white text-indigo-700 hover:bg-indigo-50 font-black py-3.5 rounded-2xl text-sm shadow-lg hover:shadow-xl transition-all active:scale-95 lang-join-section-btn">
+                    <i class="fas fa-user-plus mr-2"></i>เข้าร่วมเครือข่าย
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <main id="view-air" class="view-section max-w-7xl w-full mx-auto p-4 space-y-6">
+        <div class="bg-gradient-to-br from-slate-900 to-blue-950 p-6 md:p-10 rounded-[2rem] shadow-md border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+            <i class="fas fa-chart-network absolute -right-10 -bottom-10 text-[12rem] text-slate-800 opacity-20"></i>
+            <div class="relative z-10">
+                <h2 class="text-xl md:text-2xl font-black text-white tracking-tight lang-air-avg-title"><i class="fas fa-calculator text-blue-500 mr-2.5"></i>คำนวณค่าดัชนีเฉลี่ยถ่วงน้ำหนักรวมจังหวัด</h2>
+                <p class="text-xs font-medium text-slate-400 mt-2 max-w-xl lang-air-avg-desc">ระบบทำการเชื่อมโยงข้อมูลและดึงค่าเฉลี่ยค่าน้ำหนักฝุ่นละอองจากสถานีเครือข่ายชุมชนในพิกัดทั้ง 23 อำเภอของจังหวัดนครศรีธรรมราชแบบเรียลไทม์</p>
+            </div>
+            <div class="bg-white/10 backdrop-blur-md px-8 py-5 rounded-2xl border border-white/15 text-center min-w-[200px] relative z-10">
+                <div id="air-provincial-avg" class="text-5xl font-black text-blue-400 tracking-tighter">--</div>
+                <div class="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mt-1">PM2.5 Provincial Avg</div>
+            </div>
+        </div>
+
+        <div id="pm25-source-status" class="text-[10px] md:text-xs font-bold text-slate-400 flex items-center px-1"><i class="fas fa-circle text-slate-300 text-[6px] mr-1.5 animate-pulse"></i>กำลังเชื่อมต่อข้อมูลฝุ่นจริงจาก Open-Meteo...</div>
+
+        <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200/80">
+            <h2 class="text-sm font-black text-slate-900 uppercase tracking-wider mb-4 lang-air-table-title"><i class="fas fa-table-list text-blue-500 mr-2"></i>รายงานดัชนีคุณภาพอากาศแยกตามเขตการปกครอง</h2>
+            <div class="text-xs text-blue-700 bg-blue-50/70 p-4 rounded-xl border border-blue-100 flex items-start mb-4"><i class="fas fa-circle-info mt-0.5 mr-2.5 text-blue-600 text-sm"></i><span class="lang-air-hint">คำแนะนำผู้ใช้งาน: ท่านสามารถคลิกเลือกที่แถวรายชื่อของอำเภอใดๆ ที่ต้องการ เพื่อเข้าสู่โหมดวิเคราะห์ระดับลึก พร้อมรับฟังเสียงสรุปรายงานและคำแนะนำด้านการดูแลสุขภาวะอนามัย</span></div>
+            
+            <div class="overflow-x-auto rounded-2xl border border-slate-100 custom-scrollbar shadow-inner">
+                <table class="w-full text-left text-xs md:text-sm whitespace-nowrap">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 font-extrabold text-[11px] uppercase tracking-wider border-b border-slate-200/60">
+                            <th class="p-4 pl-6 lang-th-district">เขตพื้นที่ปกครอง (District)</th>
+                            <th class="p-4 text-center lang-th-pm">ปริมาณฝุ่น PM2.5 (mcg/m³)</th>
+                            <th class="p-4 lang-th-status">เกณฑ์การประเมินสภาวะแวดล้อม</th>
+                            <th class="p-4 text-center lang-th-action">ตัวเลือกการวิเคราะห์</th>
+                        </tr>
+                    </thead>
+                    <tbody id="main-district-table" class="divide-y divide-slate-100 font-medium text-slate-700">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <main id="view-district-detail" class="view-section max-w-3xl w-full mx-auto p-4 py-8">
+        <button onclick="switchView('air')" class="text-xs font-bold text-slate-600 hover:text-blue-600 mb-5 flex items-center bg-white border border-slate-200 px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fas fa-circle-chevron-left mr-2 text-slate-400 text-sm"></i><span class="lang-detail-back">ย้อนกลับไปตารางสรุปรวม</span></button>
+        
+        <div class="bg-white rounded-[2.5rem] shadow-xl border border-slate-200/70 overflow-hidden relative">
+            <div id="detail-accent-bar" class="h-3.5 w-full bg-slate-300 transition-colors duration-500"></div>
+            <div class="p-8 md:p-12 text-center space-y-6">
+                <div>
+                    <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 lang-detail-sub">ข้อมูลรายงานจากสถานีเครือข่าย</div>
+                    <h1 id="detail-title-name" class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">--</h1>
+                </div>
+
+                <div class="flex flex-col items-center justify-center py-2">
+                    <div id="detail-gauge-frame" class="w-48 h-48 rounded-full border-[12px] border-slate-100 flex flex-col items-center justify-center shadow-inner relative transition-all duration-500 bg-slate-50/50">
+                        <span class="text-[9px] font-black text-slate-400 tracking-widest uppercase absolute top-8">PM 2.5</span>
+                        <span id="detail-pm-display" class="text-6xl font-black text-slate-900 tracking-tighter">--</span>
+                        <span class="text-[10px] font-bold text-slate-400 absolute bottom-8">mcg/m³</span>
+                    </div>
+                    <div id="detail-status-pill" class="mt-6 px-6 py-1.5 rounded-full text-xs font-black text-white shadow-md uppercase tracking-wider transition-all duration-500">
+                        --
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 md:p-6 text-left max-w-xl mx-auto shadow-inner relative overflow-hidden">
+                    <i class="fas fa-heart-pulse absolute -right-4 -bottom-4 text-7xl text-slate-200/60 opacity-60"></i>
+                    <h4 class="font-extrabold text-slate-900 text-xs uppercase tracking-wider mb-2 border-b border-slate-200 pb-2 relative z-10 text-blue-600 lang-detail-rec-title"><i class="fas fa-user-doctor mr-1.5 text-sm"></i>ข้อแนะนำการปฏิบัติปฏิบัติตนด้านสาธารณสุข</h4>
+                    <p id="detail-rec-text" class="text-xs md:text-sm text-slate-600 leading-relaxed font-medium relative z-10 min-h-[45px]">--</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto text-left">
+                    <div class="bg-rose-50/70 border border-rose-100 rounded-2xl p-5 relative overflow-hidden">
+                        <i class="fas fa-triangle-exclamation absolute -right-3 -bottom-3 text-6xl text-rose-200/50 opacity-60"></i>
+                        <h4 class="font-extrabold text-rose-700 text-xs uppercase tracking-wider mb-2 border-b border-rose-100 pb-2 relative z-10"><i class="fas fa-smog mr-1.5 text-sm"></i><span class="lang-detail-cause-title">ปัญหาหลักที่ก่อให้เกิดฝุ่นในพื้นที่</span></h4>
+                        <ul id="detail-cause-list" class="text-xs md:text-sm text-slate-600 leading-relaxed font-medium relative z-10 space-y-1.5 list-disc list-inside"></ul>
+                    </div>
+                    <div class="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-5 relative overflow-hidden">
+                        <i class="fas fa-leaf absolute -right-3 -bottom-3 text-6xl text-emerald-200/50 opacity-60"></i>
+                        <h4 class="font-extrabold text-emerald-700 text-xs uppercase tracking-wider mb-2 border-b border-emerald-100 pb-2 relative z-10"><i class="fas fa-circle-check mr-1.5 text-sm"></i><span class="lang-detail-solution-title">แนวทางการแก้ไขปัญหา</span></h4>
+                        <ul id="detail-solution-list" class="text-xs md:text-sm text-slate-600 leading-relaxed font-medium relative z-10 space-y-1.5 list-disc list-inside"></ul>
+                    </div>
+                </div>
+                
+                <!-- ====== Character Speech Widget (ข้อ 5) ====== -->
+                <div id="speech-character-panel" class="pt-2">
+                    <div class="bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-100 border border-blue-100 rounded-3xl p-5 max-w-xl mx-auto relative overflow-hidden">
+                        <!-- background decoration -->
+                        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+                            <div class="absolute -top-8 -right-8 w-40 h-40 bg-blue-200/30 rounded-full blur-2xl"></div>
+                            <div class="absolute -bottom-6 -left-6 w-32 h-32 bg-indigo-200/30 rounded-full blur-xl"></div>
+                        </div>
+
+                        <div class="flex items-end justify-center gap-4 mb-4 relative z-10">
+                            <!-- ตัวการ์ตูน 3D -->
+                            <div class="relative shrink-0" style="filter: drop-shadow(0 8px 20px rgba(99,102,241,0.35)) drop-shadow(0 2px 6px rgba(0,0,0,0.18));">
+                                <svg id="char-svg" width="110" height="140" viewBox="0 0 110 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <defs>
+                                        <!-- gradient หัว (ผิว 3D) -->
+                                        <radialGradient id="skinGrad" cx="42%" cy="35%" r="60%">
+                                            <stop offset="0%" stop-color="#FFE0AC"/>
+                                            <stop offset="55%" stop-color="#FFCA7A"/>
+                                            <stop offset="100%" stop-color="#F0A840"/>
+                                        </radialGradient>
+                                        <!-- gradient ผม -->
+                                        <radialGradient id="hairGrad" cx="50%" cy="30%" r="65%">
+                                            <stop offset="0%" stop-color="#A16207"/>
+                                            <stop offset="100%" stop-color="#431407"/>
+                                        </radialGradient>
+                                        <!-- gradient ตัว/เสื้อ -->
+                                        <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#60A5FA"/>
+                                            <stop offset="100%" stop-color="#3B82F6"/>
+                                        </linearGradient>
+                                        <!-- gradient แก้มแดง -->
+                                        <radialGradient id="blushGrad" cx="50%" cy="50%" r="50%">
+                                            <stop offset="0%" stop-color="#FCA5A5" stop-opacity="0.9"/>
+                                            <stop offset="100%" stop-color="#FCA5A5" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <!-- gradient ตาขาว -->
+                                        <radialGradient id="eyeWhiteGrad" cx="40%" cy="35%" r="60%">
+                                            <stop offset="0%" stop-color="#ffffff"/>
+                                            <stop offset="100%" stop-color="#E0E7FF"/>
+                                        </radialGradient>
+                                        <!-- gradient ม่านตา -->
+                                        <radialGradient id="irisGrad" cx="38%" cy="35%" r="55%">
+                                            <stop offset="0%" stop-color="#4338CA"/>
+                                            <stop offset="60%" stop-color="#1D4ED8"/>
+                                            <stop offset="100%" stop-color="#1E3A8A"/>
+                                        </radialGradient>
+                                        <!-- shadow ใต้ตัว -->
+                                        <radialGradient id="shadowGrad" cx="50%" cy="30%" r="50%">
+                                            <stop offset="0%" stop-color="#6366F1" stop-opacity="0.25"/>
+                                            <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <!-- gradient กระดุม/badge -->
+                                        <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#F9A8D4"/>
+                                            <stop offset="100%" stop-color="#EC4899"/>
+                                        </linearGradient>
+                                        <!-- เงาพื้น -->
+                                        <filter id="softShadow">
+                                            <feGaussianBlur in="SourceGraphic" stdDeviation="3"/>
+                                        </filter>
+                                    </defs>
+
+                                    <!-- เงาพื้น -->
+                                    <ellipse cx="55" cy="136" rx="30" ry="6" fill="url(#shadowGrad)" filter="url(#softShadow)"/>
+
+                                    <!-- ===== ตัว/เสื้อ ===== -->
+                                    <ellipse cx="55" cy="118" rx="30" ry="20" fill="url(#bodyGrad)"/>
+                                    <!-- specular highlight บนเสื้อ -->
+                                    <ellipse cx="44" cy="106" rx="10" ry="5" fill="white" opacity="0.18" transform="rotate(-15 44 106)"/>
+                                    <!-- ขอบเสื้อล่าง -->
+                                    <ellipse cx="55" cy="134" rx="28" ry="7" fill="#2563EB"/>
+
+                                    <!-- badge / logo เสื้อ -->
+                                    <rect x="44" y="110" width="22" height="14" rx="5" fill="url(#badgeGrad)"/>
+                                    <text x="55" y="121" text-anchor="middle" font-size="6.5" font-weight="900" fill="white" font-family="Arial,sans-serif">BS</text>
+
+                                    <!-- แขนซ้าย (3D pill) -->
+                                    <ellipse cx="22" cy="110" rx="8" ry="16" fill="url(#bodyGrad)" transform="rotate(-20 22 110)"/>
+                                    <ellipse cx="19" cy="104" rx="3" ry="6" fill="white" opacity="0.18" transform="rotate(-20 19 104)"/>
+                                    <!-- มือซ้าย -->
+                                    <circle cx="17" cy="121" r="6.5" fill="url(#skinGrad)"/>
+                                    <ellipse cx="15" cy="119" r="2" fill="white" opacity="0.3"/>
+
+                                    <!-- แขนขวา -->
+                                    <ellipse cx="88" cy="110" rx="8" ry="16" fill="url(#bodyGrad)" transform="rotate(20 88 110)"/>
+                                    <ellipse cx="91" cy="104" rx="3" ry="6" fill="white" opacity="0.18" transform="rotate(20 91 104)"/>
+                                    <!-- มือขวา -->
+                                    <circle cx="93" cy="121" r="6.5" fill="url(#skinGrad)"/>
+                                    <ellipse cx="91" cy="119" r="2" fill="white" opacity="0.3"/>
+
+                                    <!-- ===== คอ ===== -->
+                                    <rect x="46" y="88" width="18" height="14" rx="7" fill="#FFCA7A"/>
+                                    <rect x="48" y="88" width="8" height="10" rx="4" fill="white" opacity="0.15"/>
+
+                                    <!-- ===== หัว (sphere) ===== -->
+                                    <ellipse cx="55" cy="57" rx="36" ry="34" fill="url(#skinGrad)"/>
+                                    <!-- rim light ด้านขวา -->
+                                    <ellipse cx="80" cy="57" rx="8" ry="22" fill="#F0A840" opacity="0.3" transform="rotate(10 80 57)"/>
+                                    <!-- specular highlight หัว -->
+                                    <ellipse cx="41" cy="38" rx="12" ry="8" fill="white" opacity="0.22" transform="rotate(-20 41 38)"/>
+
+                                    <!-- ===== หู ===== -->
+                                    <ellipse cx="19" cy="57" rx="7" ry="9" fill="#FFCA7A"/>
+                                    <ellipse cx="19" cy="57" rx="4" ry="6" fill="#F0A840"/>
+                                    <ellipse cx="91" cy="57" rx="7" ry="9" fill="#FFCA7A"/>
+                                    <ellipse cx="91" cy="57" rx="4" ry="6" fill="#F0A840"/>
+
+                                    <!-- ===== ผม ===== -->
+                                    <!-- ทรงผมหนา มีความลึก -->
+                                    <ellipse cx="55" cy="28" rx="33" ry="16" fill="url(#hairGrad)"/>
+                                    <ellipse cx="55" cy="26" rx="28" ry="11" fill="#92400E"/>
+                                    <!-- ผมแสกกลาง -->
+                                    <ellipse cx="55" cy="24" rx="4" ry="8" fill="#431407"/>
+                                    <!-- กลิ่นผม/shine -->
+                                    <ellipse cx="44" cy="20" rx="9" ry="4" fill="white" opacity="0.12" transform="rotate(-10 44 20)"/>
+                                    <!-- sideburn ซ้าย -->
+                                    <ellipse cx="23" cy="40" rx="7" ry="14" fill="url(#hairGrad)"/>
+                                    <!-- sideburn ขวา -->
+                                    <ellipse cx="87" cy="40" rx="7" ry="14" fill="url(#hairGrad)"/>
+                                    <!-- fringe หน้าผาก -->
+                                    <path d="M30 32 Q40 20 55 22 Q70 20 80 32" fill="url(#hairGrad)" stroke="none"/>
+
+                                    <!-- ===== ตาขาว (3D) ===== -->
+                                    <ellipse cx="40" cy="55" rx="10" ry="10" fill="url(#eyeWhiteGrad)"/>
+                                    <ellipse cx="70" cy="55" rx="10" ry="10" fill="url(#eyeWhiteGrad)"/>
+                                    <!-- ขอบตา -->
+                                    <ellipse cx="40" cy="55" rx="10" ry="10" fill="none" stroke="#C4B5FD" stroke-width="0.8"/>
+                                    <ellipse cx="70" cy="55" rx="10" ry="10" fill="none" stroke="#C4B5FD" stroke-width="0.8"/>
+
+                                    <!-- ===== ม่านตา + pupil ===== -->
+                                    <ellipse cx="40" cy="56" rx="6" ry="6.5" fill="url(#irisGrad)"/>
+                                    <ellipse cx="70" cy="56" rx="6" ry="6.5" fill="url(#irisGrad)"/>
+                                    <!-- pupil ดำ -->
+                                    <ellipse cx="40" cy="57" rx="3" ry="3.5" fill="#0F172A"/>
+                                    <ellipse cx="70" cy="57" rx="3" ry="3.5" fill="#0F172A"/>
+                                    <!-- catchlight (specular ดวงตา ทำให้ดูมีชีวิต) -->
+                                    <ellipse cx="42" cy="53" rx="2" ry="2" fill="white"/>
+                                    <ellipse cx="72" cy="53" rx="2" ry="2" fill="white"/>
+                                    <ellipse cx="41" cy="57.5" rx="0.8" ry="0.8" fill="white" opacity="0.6"/>
+                                    <ellipse cx="71" cy="57.5" rx="0.8" ry="0.8" fill="white" opacity="0.6"/>
+
+                                    <!-- ===== คิ้ว ===== -->
+                                    <path d="M32 45 Q40 41 48 44" stroke="#92400E" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+                                    <path d="M62 44 Q70 41 78 45" stroke="#92400E" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+
+                                    <!-- ===== แก้ม ===== -->
+                                    <ellipse cx="27" cy="65" rx="9" ry="6" fill="url(#blushGrad)"/>
+                                    <ellipse cx="83" cy="65" rx="9" ry="6" fill="url(#blushGrad)"/>
+
+                                    <!-- ===== จมูก ===== -->
+                                    <ellipse cx="55" cy="66" rx="3.5" ry="2" fill="#E09030" opacity="0.5"/>
+
+                                    <!-- ===== ปาก (animated) ===== -->
+                                    <g id="char-mouth">
+                                        <!-- ปากปิด — ยิ้มน่ารัก -->
+                                        <path id="mouth-closed" d="M45 74 Q55 82 65 74" stroke="#C2410C" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                                        <!-- ปากเปิด (ขณะพูด) -->
+                                        <ellipse id="mouth-open" cx="55" cy="76" rx="11" ry="7" fill="#9A3412" class="hidden"/>
+                                        <ellipse id="mouth-teeth" cx="55" cy="71.5" rx="9" ry="3" fill="white" class="hidden"/>
+                                        <!-- ลิ้น -->
+                                        <ellipse id="mouth-tongue" cx="55" cy="79" rx="5" ry="3" fill="#F87171" class="hidden"/>
+                                    </g>
+                                </svg>
+
+                                <!-- Speech bubble dots -->
+                                <div id="char-speaking-bubble" class="hidden absolute -top-2 -right-1 bg-white border-2 border-indigo-300 rounded-2xl px-2 py-1 shadow-lg shadow-indigo-200/50">
+                                    <div class="flex gap-1 items-end h-4">
+                                        <span class="block w-1.5 bg-indigo-400 rounded-full animate-bounce" style="height:4px;animation-delay:0s"></span>
+                                        <span class="block w-1.5 bg-indigo-400 rounded-full animate-bounce" style="height:7px;animation-delay:0.15s"></span>
+                                        <span class="block w-1.5 bg-indigo-400 rounded-full animate-bounce" style="height:5px;animation-delay:0.3s"></span>
+                                    </div>
+                                    <!-- bubble tail -->
+                                    <div class="absolute -bottom-1.5 left-3 w-3 h-3 bg-white border-r-2 border-b-2 border-indigo-300 rotate-45"></div>
+                                </div>
+                            </div>
+
+                            <!-- กล่อง subtitle -->
+                            <div class="flex-1 min-h-[90px] bg-white/90 backdrop-blur-sm border border-indigo-200 rounded-2xl p-3 shadow-md shadow-indigo-100/60 flex flex-col justify-center">
+                                <div class="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                                    <i class="fas fa-closed-captioning"></i> ซับไตเติล
+                                </div>
+                                <p id="speech-subtitle" class="text-xs md:text-sm font-bold text-slate-700 leading-relaxed min-h-[40px]">กดปุ่มด้านล่างเพื่อให้น้องอ่านสรุปให้ฟัง 🎙️</p>
+                            </div>
+                        </div>
+
+                        <!-- ปุ่มควบคุม -->
+                        <div class="flex items-center justify-center gap-3 flex-wrap relative z-10">
+                            <button id="btn-audio-control" onclick="toggleSpeechSynthesis()"
+                                class="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-7 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-300/40 transition-all flex items-center gap-2 active:scale-95">
+                                <i id="audio-icon" class="fas fa-volume-high"></i>
+                                <span id="audio-text" class="lang-audio-listen">รับฟังรายงานเสียงสรุป</span>
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 text-center mt-2 font-medium relative z-10">เสียงขึ้นอยู่กับการตั้งค่า TTS ของอุปกรณ์คุณ</p>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ====== Mascot เสียงพูด พร้อมซับไตเติล (ข้อ 5) ====== -->
+    <div id="mascot-overlay" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[10000] items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden relative animate-in">
+            <button onclick="terminateSpeechAudio()" class="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-white/90 text-slate-500 hover:bg-white hover:text-rose-500 shadow flex items-center justify-center transition"><i class="fas fa-xmark text-xs"></i></button>
+
+            <!-- ตัวการ์ตูนพูด (SVG ขยับปาก/กระพริบตา ตามจังหวะเสียง) -->
+            <div class="bg-gradient-to-b from-sky-100 to-blue-50 pt-8 pb-4 flex justify-center relative overflow-hidden">
+                <div class="absolute top-3 left-4 text-[10px] font-black text-blue-400 uppercase tracking-widest bg-white/70 px-2.5 py-1 rounded-full"><i class="fas fa-wind mr-1"></i>AirWise Buddy</div>
+                <svg id="mascot-svg" viewBox="0 0 200 200" class="w-44 h-44 drop-shadow-md">
+                    <!-- หู -->
+                    <ellipse cx="56" cy="58" rx="16" ry="20" fill="#7DD3FC"/>
+                    <ellipse cx="144" cy="58" rx="16" ry="20" fill="#7DD3FC"/>
+                    <ellipse cx="56" cy="58" rx="8" ry="11" fill="#BAE6FD"/>
+                    <ellipse cx="144" cy="58" rx="8" ry="11" fill="#BAE6FD"/>
+                    <!-- หัว -->
+                    <circle cx="100" cy="100" r="62" fill="#38BDF8"/>
+                    <circle cx="100" cy="100" r="62" fill="url(#mascotShine)" opacity="0.5"/>
+                    <!-- แก้ม -->
+                    <ellipse cx="62" cy="115" rx="11" ry="7" fill="#FCA5A5" opacity="0.55"/>
+                    <ellipse cx="138" cy="115" rx="11" ry="7" fill="#FCA5A5" opacity="0.55"/>
+                    <!-- ตา (กระพริบได้) -->
+                    <g id="mascot-eyes">
+                        <ellipse cx="78" cy="95" rx="9" ry="11" fill="#0F172A"/>
+                        <ellipse cx="122" cy="95" rx="9" ry="11" fill="#0F172A"/>
+                        <circle cx="81" cy="91" r="3" fill="#fff"/>
+                        <circle cx="125" cy="91" r="3" fill="#fff"/>
+                    </g>
+                    <!-- ปาก (ขยับตามจังหวะคำพูด) -->
+                    <ellipse id="mascot-mouth" cx="100" cy="128" rx="16" ry="6" fill="#0F172A"/>
+                    <ellipse id="mascot-mouth-inner" cx="100" cy="129" rx="9" ry="3" fill="#F87171"/>
+                </svg>
+                <defs>
+                    <radialGradient id="mascotShine" cx="35%" cy="30%" r="60%">
+                        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+                        <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                    </radialGradient>
+                </defs>
+            </div>
+
+            <!-- ซับไตเติล -->
+            <div class="p-5 space-y-3">
+                <div id="mascot-subtitle" class="min-h-[64px] bg-slate-50 border border-slate-100 rounded-2xl p-4 text-center text-sm font-bold text-slate-700 leading-relaxed flex items-center justify-center">
+                    <span class="lang-mascot-loading">กำลังเตรียมเสียงพูด...</span>
+                </div>
+                <div class="flex items-center justify-center gap-3">
+                    <button onclick="terminateSpeechAudio()" class="flex items-center gap-2 bg-rose-50 text-rose-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-rose-100 transition"><i class="fas fa-stop"></i><span class="lang-audio-stop">หยุดฟังรายงานเสียง</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== หน้าข่าวทั้งหมด ====== -->
+    <main id="view-news-all" class="view-section max-w-7xl w-full mx-auto p-4 space-y-6 py-8">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+            <div>
+                <button onclick="switchView('home')" class="text-xs font-bold text-blue-600 hover:underline mb-2 flex items-center gap-1.5">
+                    <i class="fas fa-arrow-left text-[10px]"></i> กลับหน้าแรก
+                </button>
+                <h2 class="text-2xl font-black text-slate-900 tracking-tight"><i class="fas fa-newspaper text-blue-500 mr-2"></i><span class="lang-news-all-title">ข่าวสารและประกาศทั้งหมด</span></h2>
+                <p class="text-sm text-slate-400 font-medium mt-1 lang-news-all-desc">รวมข่าวสารคุณภาพอากาศและกิจกรรมโครงการ BREATHSAFE</p>
+            </div>
+            <button id="btn-add-news-all" onclick="openNewsModal()" class="hidden bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition">
+                <i class="fas fa-plus mr-1.5"></i>เพิ่มข่าวใหม่
+            </button>
+        </div>
+
+        <!-- Search bar -->
+        <div class="relative max-w-md">
+            <i class="fas fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+            <input id="news-all-search" type="text" placeholder="ค้นหาข่าว..." oninput="filterNewsAll(this.value)"
+                class="w-full bg-white border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm">
+        </div>
+
+        <!-- News grid — แสดงทั้งหมดไม่จำกัด -->
+        <div id="news-all-empty" class="hidden flex-col items-center justify-center py-24 text-center">
+            <div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4"><i class="fas fa-newspaper"></i></div>
+            <p class="text-slate-400 font-bold text-sm">ยังไม่มีข่าวสารในระบบ</p>
+        </div>
+        <div id="news-all-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+    </main>
+
+    <main id="view-map" class="view-section max-w-7xl w-full mx-auto p-4 h-[82vh]">
+        <div class="bg-white p-4 md:p-5 rounded-[2rem] shadow-sm border border-slate-200/80 h-full flex flex-col relative">
+            <div class="mb-3 flex items-center justify-between gap-3 flex-wrap">
+                <h2 class="text-sm font-black text-slate-900 uppercase tracking-wider lang-map-main-title"><i class="fas fa-map-location text-blue-500 mr-2"></i>ศูนย์ข้อมูลภูมิสารสนเทศแสดงพิกัดมลพิษสิ่งแวดล้อมทางอากาศ</h2>
+                <!-- ปุ่ม zoom to นครศรีธรรมราช -->
+                <button onclick="zoomToNakhonSiThammarat()"
+                    class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0 lang-map-zoom-nst">
+                    <i class="fas fa-location-crosshairs"></i>นครศรีธรรมราช
+                </button>
+            </div>
+            <div id="full-screen-gis-map" class="flex-grow rounded-2xl shadow-inner border border-slate-200 relative z-10 bg-slate-50"></div>
+        </div>
+    </main>
+
+    <main id="view-about" class="view-section max-w-7xl w-full mx-auto p-4 space-y-8 py-8">
+        <div class="text-center space-y-2 max-w-xl mx-auto">
+            <h2 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight lang-about-title">คณะผู้จัดทำและพัฒนาโครงงาน</h2>
+            <p class="text-xs md:text-sm font-medium text-slate-400 leading-relaxed lang-about-desc">โครงงานระบบฐานข้อมูลสารสนเทศเพื่อความปลอดภัยทางสิ่งแวดล้อม พัฒนาโดยนักเรียนโรงเรียนเตรียมอุดมศึกษาภาคใต้</p>
+        </div>
+        
+        <div class="flex justify-end">
+            <button id="btn-add-member-card" onclick="openAboutModal()" class="hidden bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition"><i class="fas fa-user-plus mr-1.5"></i><span class="lang-about-add">เพิ่มข้อมูลคณะผู้จัดทำ</span></button>
+        </div>
+
+        <div class="relative">
+        <div id="about-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            </div>
+        <!-- Loading state -->
+        <div id="about-loading-state" class="hidden flex-col items-center justify-center py-20 text-center">
+            <div class="flex gap-2 mb-4">
+                <span class="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0s"></span>
+                <span class="w-3 h-3 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0.15s"></span>
+                <span class="w-3 h-3 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0.3s"></span>
+            </div>
+            <p class="text-sm font-bold text-slate-400">กำลังโหลดข้อมูลผู้จัดทำ...</p>
+        </div>
+        <!-- Empty state -->
+        <div id="about-empty-state" class="hidden flex-col items-center justify-center py-20 text-center">
+            <div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4 shadow-inner">
+                <i class="fas fa-users"></i>
+            </div>
+            <p class="text-base font-black text-slate-400 mb-1">ยังไม่มีข้อมูลผู้จัดทำ</p>
+            <p class="text-xs text-slate-300 font-medium">ผู้ดูแลระบบสามารถเพิ่มข้อมูลได้จากปุ่มด้านบน</p>
+        </div>
+        </div>
+    </main>
+
+    <main id="view-join" class="view-section max-w-md w-full mx-auto px-4 py-8 md:py-12">
+
+        <!-- ===== LOGIN BOX ===== -->
+        <div id="box-user-authentication" class="bg-white rounded-[2.5rem] shadow-xl border border-slate-200/80 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+            <div class="p-7 md:p-9 space-y-5">
+                <!-- Header -->
+                <div class="text-center pb-4 border-b border-slate-100">
+                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-blue-200">
+                        <i class="fas fa-fingerprint"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-slate-900 tracking-tight lang-auth-title">เข้าสู่ระบบ BREATHSAFE</h2>
+                    <p class="text-[11px] text-slate-400 mt-1 font-semibold lang-auth-subtitle">ติดตามสถิติคุณภาพอากาศรายวันของคุณ</p>
+                </div>
+
+                <!-- Email -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">อีเมล (Email)</label>
+                    <div class="relative">
+                        <i class="fas fa-at absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-auth-email" type="email" placeholder="username@email.com"
+                            class="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 bg-slate-50 focus:bg-white transition">
+                    </div>
+                </div>
+
+                <!-- Password -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-600">รหัสผ่าน (Password)</label>
+                    </div>
+                    <div class="relative">
+                        <i class="fas fa-shield-keyhole absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-auth-password" type="password" placeholder="••••••••"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 bg-slate-50 focus:bg-white transition">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-auth-password')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Login button -->
+                <div class="pt-1 space-y-3">
+                    <button onclick="executeFirebaseEmailAuth('login')"
+                        class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md shadow-blue-200 hover:shadow-lg transition active:scale-[0.98] flex justify-center items-center gap-2">
+                        <i class="fas fa-right-to-bracket"></i>
+                        <span class="lang-auth-btn-in">เข้าสู่ระบบ</span>
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="relative flex items-center py-1">
+                        <div class="flex-grow border-t border-slate-200"></div>
+                        <span class="mx-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">หรือ</span>
+                        <div class="flex-grow border-t border-slate-200"></div>
+                    </div>
+
+                    <!-- Google Sign-In -->
+                    <button onclick="executeFirebaseGoogleAuth()"
+                        class="w-full bg-white border border-slate-200 text-slate-700 font-bold py-3.5 rounded-xl text-sm shadow-sm hover:bg-slate-50 hover:border-slate-300 transition active:scale-[0.98] flex items-center justify-center gap-3">
+                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.92l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+                        <span class="lang-auth-google">เข้าสู่ระบบด้วย Google</span>
+                    </button>
+                </div>
+
+                <!-- Register link -->
+                <div class="text-center pt-2 border-t border-slate-100">
+                    <p class="text-xs text-slate-500">ยังไม่มีบัญชี?
+                        <button onclick="switchAuthBoxMode('register')" class="text-blue-600 font-bold hover:underline">สมัครสมาชิกฟรี</button>
+                    </p>
+                </div>
+
+                <!-- Admin link -->
+                <div class="text-center">
+                    <button onclick="switchAuthBoxMode('admin')" class="text-[10px] font-black text-slate-300 hover:text-rose-500 transition uppercase tracking-wider">
+                        <i class="fas fa-lock-keyhole text-[9px] mr-1"></i>Admin Access
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== REGISTER BOX ===== -->
+        <div id="box-register-authentication" class="hidden bg-white rounded-[2.5rem] shadow-xl border border-slate-200/80 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-500"></div>
+            <div class="p-7 md:p-9 space-y-5">
+                <!-- Header -->
+                <div class="text-center pb-4 border-b border-slate-100">
+                    <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-emerald-200">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-slate-900 tracking-tight">สมัครสมาชิกใหม่</h2>
+                    <p class="text-[11px] text-slate-400 mt-1 font-semibold">สร้างบัญชี BREATHSAFE ฟรี ไม่มีค่าใช้จ่าย</p>
+                </div>
+
+                <!-- Email -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">อีเมล <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <i class="fas fa-at absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-reg-email" type="email" placeholder="username@email.com"
+                            class="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 focus:bg-white transition"
+                            oninput="validateRegisterForm()">
+                    </div>
+                </div>
+
+                <!-- Password -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">รหัสผ่าน <span class="text-rose-500">*</span> <span class="text-slate-400 font-normal">(อย่างน้อย 6 ตัวอักษร)</span></label>
+                    <div class="relative">
+                        <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-reg-password" type="password" placeholder="สร้างรหัสผ่าน"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 focus:bg-white transition"
+                            oninput="validateRegisterForm()">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-reg-password')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                    </div>
+                    <!-- Password strength bar -->
+                    <div class="flex gap-1 mt-1">
+                        <div id="pw-bar-1" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                        <div id="pw-bar-2" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                        <div id="pw-bar-3" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                        <div id="pw-bar-4" class="h-1 flex-1 rounded-full bg-slate-200 transition-all duration-300"></div>
+                    </div>
+                    <p id="pw-strength-label" class="text-[10px] font-bold text-slate-400"></p>
+                </div>
+
+                <!-- Confirm Password -->
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">ยืนยันรหัสผ่าน <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <i class="fas fa-shield-check absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-reg-confirm" type="password" placeholder="พิมพ์รหัสผ่านอีกครั้ง"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 focus:bg-white transition"
+                            oninput="validateRegisterForm()">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-reg-confirm')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                        <!-- match indicator -->
+                        <div id="confirm-match-icon" class="absolute right-11 top-1/2 -translate-y-1/2 hidden">
+                            <i class="fas fa-circle-check text-emerald-500 text-sm"></i>
+                        </div>
+                        <div id="confirm-nomatch-icon" class="absolute right-11 top-1/2 -translate-y-1/2 hidden">
+                            <i class="fas fa-circle-xmark text-rose-500 text-sm"></i>
+                        </div>
+                    </div>
+                    <p id="confirm-match-msg" class="text-[10px] font-bold text-slate-400"></p>
+                </div>
+
+                <!-- Register button -->
+                <div class="pt-1 space-y-3">
+                    <button id="btn-register" onclick="executeFirebaseRegister()"
+                        class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md shadow-emerald-200 hover:shadow-lg transition active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                        <i class="fas fa-user-plus"></i>
+                        สร้างบัญชีใหม่
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="relative flex items-center py-1">
+                        <div class="flex-grow border-t border-slate-200"></div>
+                        <span class="mx-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">หรือ</span>
+                        <div class="flex-grow border-t border-slate-200"></div>
+                    </div>
+
+                    <!-- Google Sign-In (สมัครผ่าน Google ทันที) -->
+                    <button onclick="executeFirebaseGoogleAuth()"
+                        class="w-full bg-white border border-slate-200 text-slate-700 font-bold py-3.5 rounded-xl text-sm shadow-sm hover:bg-slate-50 hover:border-slate-300 transition active:scale-[0.98] flex items-center justify-center gap-3">
+                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.92l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+                        สมัครด้วยบัญชี Google
+                    </button>
+                </div>
+
+                <!-- Back to login -->
+                <div class="text-center pt-2 border-t border-slate-100">
+                    <p class="text-xs text-slate-500">มีบัญชีอยู่แล้ว?
+                        <button onclick="switchAuthBoxMode('user')" class="text-blue-600 font-bold hover:underline">เข้าสู่ระบบ</button>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== ADMIN BOX ===== -->
+        <div id="box-admin-authentication" class="hidden bg-white rounded-[2.5rem] shadow-xl border border-rose-100 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-500 to-red-600"></div>
+            <div class="p-7 md:p-9 space-y-5">
+                <div class="text-center pb-4 border-b border-rose-100">
+                    <div class="w-16 h-16 bg-gradient-to-br from-rose-500 to-red-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl mb-3 shadow-lg shadow-rose-200">
+                        <i class="fas fa-user-gear"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-rose-800 tracking-tight">ระบบผู้ดูแลระบบ</h2>
+                    <p class="text-[11px] text-rose-400 mt-1 font-bold">สงวนสิทธิ์เฉพาะผู้พัฒนาและแอดมินโรงเรียนเท่านั้น</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">Admin ID</label>
+                    <div class="relative">
+                        <i class="fas fa-id-card-clip absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-admin-username" type="text" placeholder="ระบุแอดมินไอดี"
+                            class="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-400 bg-slate-50">
+                    </div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-600">Password</label>
+                    <div class="relative">
+                        <i class="fas fa-key-skeleton absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input id="input-admin-password" type="password" placeholder="••••••••"
+                            class="w-full border border-slate-200 pl-10 pr-11 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-400 bg-slate-50">
+                        <button type="button" onclick="toggleInputPasswordVisibility('input-admin-password')"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 transition">
+                            <i class="fas fa-eye text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pt-1 space-y-2">
+                    <button onclick="executeSystemAdminLogin()"
+                        class="w-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold py-3.5 rounded-xl text-sm uppercase tracking-wider shadow-md hover:shadow-lg transition active:scale-[0.98]">
+                        <i class="fas fa-unlock-keyhole mr-1.5"></i>ยืนยันสิทธิ์แอดมิน
+                    </button>
+                    <button onclick="switchAuthBoxMode('user')"
+                        class="w-full text-[11px] font-bold text-slate-400 hover:text-slate-700 text-center block pt-1 underline uppercase tracking-wider lang-admin-back">
+                        ← กลับหน้าผู้ใช้งานทั่วไป
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== PROFILE (logged in) ===== -->
+        <div id="box-profile-authenticated" class="hidden bg-white rounded-[2.5rem] shadow-xl border border-slate-200/80 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+            <div class="p-7 md:p-9 text-center space-y-5 py-8">
+                <div class="relative w-24 h-24 mx-auto">
+                    <div class="w-24 h-24 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-full flex items-center justify-center text-3xl shadow-lg border-4 border-white">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div id="badge-admin-profile-star" class="hidden absolute bottom-0 right-0 bg-rose-500 text-white w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] shadow">
+                        <i class="fas fa-star"></i>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 bg-slate-100 inline-block px-3 py-1 rounded-full lang-profile-greet">เชื่อมต่อระบบสำเร็จ</div>
+                    <h3 id="authenticated-user-name" class="font-extrabold text-base text-slate-900 break-words max-w-xs mx-auto mt-2">--</h3>
+                </div>
+                <div class="pt-4 border-t border-slate-100">
+                    <button onclick="executeSignOutAction()" class="bg-white text-rose-600 border border-rose-200 px-6 py-3 rounded-xl text-xs font-bold shadow-sm hover:bg-rose-50 transition w-full uppercase tracking-wider">
+                        <i class="fas fa-power-off mr-2"></i><span class="lang-profile-out">ออกจากระบบ</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="modal-admin-hero" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] justify-center items-center p-4">
+        <div class="bg-white w-full max-w-md p-6 md:p-8 rounded-3xl space-y-5 shadow-2xl animate-in scale-95 duration-200">
+            <h3 class="font-black text-lg text-slate-900 border-b border-slate-100 pb-3"><i class="fas fa-image text-blue-500 mr-2"></i>ตั้งค่ารูปภาพหน้าปกระบบ</h3>
+            <div class="space-y-2">
+                <label class="text-xs font-bold text-slate-600">อัปโหลดรูปภาพจากเครื่องของคุณ</label>
+                <div id="hero-upload-zone" onclick="document.getElementById('form-hero-file').click()" class="relative w-full h-40 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer flex flex-col items-center justify-center overflow-hidden group">
+                    <img id="hero-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพหน้าปก">
+                    <div id="hero-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
+                        <i class="fas fa-cloud-arrow-up text-3xl mb-2"></i>
+                        <span class="text-xs font-bold">คลิกเพื่อเลือกรูปภาพ</span>
+                        <span class="text-[10px] text-slate-400 mt-1">รองรับ JPG, PNG, WebP (ไม่เกิน 4MB)</span>
+                    </div>
+                </div>
+                <input id="form-hero-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'hero-preview-img', 'hero-upload-placeholder')">
+            </div>
+            <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button onclick="closeActiveModal('modal-admin-hero')" class="px-4 py-2.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200 transition">ยกเลิก</button>
+                <button onclick="processSaveHeroBanner()" class="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700 transition">บันทึกปก</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-admin-news" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] justify-center items-center p-4">
+        <div class="bg-white w-full max-w-lg p-6 md:p-8 rounded-3xl space-y-4 shadow-2xl">
+            <h3 id="news-modal-title" class="font-black text-lg text-slate-900 border-b border-slate-100 pb-3"><i class="fas fa-bullhorn text-blue-500 mr-2"></i>เขียนข่าวประกาศประชาสัมพันธ์ใหม่</h3>
+            <input type="hidden" id="form-news-edit-id">
+            <div class="space-y-3 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+                <div><label class="text-xs font-bold text-slate-600 mb-1 block">หัวข้อข่าวสาร</label><input id="form-news-title" type="text" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></div>
+                <div><label class="text-xs font-bold text-slate-600 mb-1 block">เนื้อหาข่าวฉบับย่อ</label><textarea id="form-news-desc" rows="3" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></textarea></div>
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-600 block">รูปภาพหน้าปกข่าว</label>
+                    <div id="news-upload-zone" onclick="document.getElementById('form-news-file').click()" class="relative w-full h-32 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer flex flex-col items-center justify-center overflow-hidden group">
+                        <img id="news-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพข่าว">
+                        <div id="news-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
+                            <i class="fas fa-cloud-arrow-up text-2xl mb-1.5"></i>
+                            <span class="text-[11px] font-bold">คลิกเพื่อเลือกรูปภาพ</span>
+                        </div>
+                    </div>
+                    <input id="form-news-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'news-preview-img', 'news-upload-placeholder')">
+                    <input type="hidden" id="form-news-image">
+                </div>
+                <div><label class="text-xs font-bold text-slate-600 mb-1 block">วันที่เผยแพร่ข่าว</label><input id="form-news-date" type="date" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button onclick="closeActiveModal('modal-admin-news')" class="px-4 py-2.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200">ยกเลิก</button>
+                <button onclick="processSaveNewsRecord()" class="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700">ยืนยันการเผยแพร่</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-news-viewer" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] justify-center items-center p-4">
+        <div class="bg-white w-full max-w-xl p-6 md:p-8 rounded-[2rem] space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div class="h-56 w-full rounded-2xl overflow-hidden shadow-inner border border-slate-100">
+                <img id="view-news-img" src="" alt="" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full w-max"><i class="fas fa-calendar-days mr-1.5"></i><span id="view-news-date"></span></div>
+            <h3 id="view-news-title" class="font-black text-xl text-slate-900 leading-snug"></h3>
+            <p id="view-news-desc" class="text-xs md:text-sm text-slate-600 leading-relaxed font-medium whitespace-pre-line border-t border-slate-100 pt-3"></p>
+            <div class="flex justify-end pt-3">
+                <button onclick="closeActiveModal('modal-news-viewer')" class="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition">ปิดหน้าต่างข่าว</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-admin-about" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] justify-center items-center p-4">
+        <div class="bg-white w-full max-w-lg p-6 md:p-8 rounded-3xl space-y-4 shadow-2xl">
+            <h3 id="about-modal-title" class="font-black text-lg text-slate-900 border-b border-slate-100 pb-3"><i class="fas fa-user-pen text-blue-500 mr-2"></i>จัดการข้อมูลคณะผู้จัดทำโครงงาน</h3>
+            <input type="hidden" id="form-about-edit-id">
+            <div class="space-y-3 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+                <div><label class="text-xs font-bold text-slate-600 mb-1 block">ชื่อ - นามสกุลจริง</label><input id="form-about-name" type="text" placeholder="นาย / นางสาว..." class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500"></div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs font-bold text-slate-600 mb-1 block">ชื่อเล่น</label><input id="form-about-nickname" type="text" placeholder="ระบุชื่อเล่น" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
+                    <div><label class="text-xs font-bold text-slate-600 mb-1 block">อายุ (ปี)</label><input id="form-about-age" type="number" placeholder="ระบุอายุ" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs font-bold text-slate-600 mb-1 block">ระดับชั้นการศึกษา (ม.)</label><input id="form-about-grade" type="text" placeholder="ม.5/X หรือ ม.6/X" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
+                    <div><label class="text-xs font-bold text-slate-600 mb-1 block">ชื่อโรงเรียนสถานศึกษา</label><input id="form-about-school" type="text" value="โรงเรียนเตรียมอุดมศึกษาภาคใต้" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-600 block">รูปถ่ายส่วนตัวสำหรับการ์ดโปรไฟล์</label>
+                    <div class="flex items-center gap-4">
+                        <div id="about-upload-zone" onclick="document.getElementById('form-about-file').click()" class="relative w-20 h-20 shrink-0 rounded-full border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer flex items-center justify-center overflow-hidden group">
+                            <img id="about-preview-img" class="hidden absolute inset-0 w-full h-full object-cover rounded-full" alt="ตัวอย่างรูปโปรไฟล์">
+                            <div id="about-upload-placeholder" class="flex items-center justify-center w-full h-full">
+                                <i class="fas fa-camera text-slate-400 group-hover:text-blue-500 transition-colors text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-slate-400 leading-relaxed">คลิกที่วงกลมเพื่อเลือกรูปภาพจากเครื่องของคุณ<br>(แนะนำรูปสี่เหลี่ยมจัตุรัส ไม่เกิน 4MB)</div>
+                    </div>
+                    <input id="form-about-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'about-preview-img', 'about-upload-placeholder')">
+                    <input type="hidden" id="form-about-image">
+                </div>
+                <div><label class="text-xs font-bold text-slate-600 mb-1 block">ข้อมูลเพิ่มเติมอื่นๆ (เช่น ตำแหน่งในกลุ่ม, ความสามารถพิเศษ)</label><input id="form-about-custom" type="text" placeholder="หัวหน้าโครงงาน / นักพัฒนา Fullstack" class="w-full border border-slate-200 p-2.5 rounded-xl text-xs bg-slate-50"></div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button onclick="closeActiveModal('modal-admin-about')" class="px-4 py-2.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200">ยกเลิก</button>
+                <button onclick="processSaveAboutRecord()" class="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700">บันทึกข้อมูลบุคลากร</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════
+         JavaScript Files — โหลดตามลำดับ dependency
+         ═══════════════════════════════════════════════════ -->
+
+    <!-- 1. ข้อมูล: อำเภอ, ปัญหาฝุ่น, พจนานุกรมภาษา -->
+    <script src="data.js"></script>
+
+    <!-- 2. ตัวแปรสถานะหลักของแอป -->
+    <script src="app-state.js"></script>
+
+    <!-- 3. ประเมินระดับ PM2.5 -->
+    <script src="air-quality.js"></script>
+
+    <!-- 4. ระบบเสียง AI TTS + หน้ารายละเอียดอำเภอ -->
+    <script src="speech.js"></script>
+
+    <!-- 5. GIS Map Engine (Leaflet) -->
+    <script src="map.js"></script>
+
+    <!-- 6. เปลี่ยนภาษา + แสดงผล Dashboard -->
+    <script src="ui-render.js"></script>
+
+    <!-- 7. อัปโหลดรูป + Cropper + Hero/ข่าว/คณะผู้จัดทำ CRUD -->
+    <script src="upload.js"></script>
+
+    <!-- 8. Firebase Auth + Login State + Modal + Bootstrap + Router -->
+    <script src="auth.js"></script>
+
+    <!-- 9. API จริง: PM2.5, Weather, Extra AQ, Member Count, News All -->
+    <script src="api.js"></script>
+
+    <!-- 10. Cookie Banner -->
+    <script src="cookie.js"></script>
+
+    <div id="modal-view-about" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 opacity-0 transition-opacity duration-300" style="transition: opacity 0.3s ease;">
+        <div class="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="h-32 bg-gradient-to-r from-blue-500 to-indigo-600 relative">
+                <button onclick="closeActiveModal('modal-view-about')" class="absolute top-4 right-4 w-8 h-8 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white backdrop-blur transition">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="px-8 pb-8 relative -mt-16 text-center">
+                <img id="view-about-image" src="" class="w-32 h-32 rounded-full mx-auto border-4 border-white shadow-lg object-cover bg-white mb-4">
+                <h3 id="view-about-name" class="text-2xl font-black text-slate-900 mb-1">ชื่อ-นามสกุล</h3>
+                <div id="view-about-custom" class="text-[10px] font-bold text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-full inline-block mb-6 shadow-inner">ตำแหน่ง</div>
+                
+                <div class="space-y-3 text-left text-sm text-slate-600 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <div class="flex justify-between border-b border-slate-200/60 pb-2">
+                        <span class="font-bold text-slate-400">ชื่อเล่น</span>
+                        <span id="view-about-nickname" class="font-bold text-slate-800"></span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-200/60 pb-2">
+                        <span class="font-bold text-slate-400">อายุ</span>
+                        <span id="view-about-age" class="font-bold text-slate-800"></span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-200/60 pb-2">
+                        <span class="font-bold text-slate-400">ระดับชั้น</span>
+                        <span id="view-about-grade" class="font-bold text-slate-800"></span>
+                    </div>
+                    <div class="flex flex-col pt-1">
+                        <span class="font-bold text-slate-400 mb-1">โรงเรียน</span>
+                        <span id="view-about-school" class="font-bold text-slate-800"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ====== Cookie Consent Banner (ปรับปรุงให้รองรับมือถือสวยงาม) ====== -->
+    <div id="cookie-banner" class="fixed bottom-0 left-0 w-full z-[9999] transform translate-y-full transition-transform duration-500 ease-out px-3 pb-3 md:px-6 md:pb-6 pointer-events-none">
+        <div class="max-w-3xl mx-auto bg-white/95 backdrop-blur-md border border-slate-200 shadow-[0_-8px_30px_-6px_rgba(15,23,42,0.18)] rounded-[1.75rem] md:rounded-3xl p-4 md:p-5 pointer-events-auto">
+            <div class="flex items-start gap-3 md:gap-4">
+                <div class="text-blue-600 text-lg shrink-0 flex items-center justify-center bg-blue-50 w-11 h-11 rounded-2xl">
+                    <i class="fas fa-cookie-bite"></i>
+                </div>
+                <div class="flex-grow min-w-0">
+                    <h4 class="text-slate-900 font-extrabold text-sm">เว็บไซต์นี้ใช้คุกกี้ (Cookies)</h4>
+                    <p class="text-slate-500 text-[11px] md:text-xs mt-1 leading-relaxed">
+                        เราใช้คุกกี้เพื่อมอบประสบการณ์การใช้งานที่ดีที่สุดบนเว็บไซต์ของเรา การคลิก "ยอมรับทั้งหมด" ถือว่าคุณยินยอมให้เราใช้คุกกี้ตามนโยบายความเป็นส่วนตัว
+                    </p>
+                </div>
+                <button onclick="dismissCookieBanner(false)" class="shrink-0 w-7 h-7 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition flex items-center justify-center"><i class="fas fa-xmark text-xs"></i></button>
+            </div>
+            <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 mt-4">
+                <button onclick="dismissCookieBanner(false)" class="w-full sm:w-auto bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-bold text-[11px] md:text-xs hover:bg-slate-200 transition-all uppercase tracking-wider">
+                    ปฏิเสธ
+                </button>
+                <button onclick="dismissCookieBanner(true)" class="w-full sm:flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold text-[11px] md:text-xs shadow-md shadow-blue-500/30 transition-all uppercase tracking-wider">
+                    <i class="fas fa-check mr-1.5"></i>ยอมรับคุกกี้ทั้งหมด
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
