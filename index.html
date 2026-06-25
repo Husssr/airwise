@@ -931,6 +931,10 @@ const firebaseConfig = {
 
         <div id="about-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             </div>
+        <!-- Admin hint -->
+        <div id="about-admin-hint" class="hidden text-center py-6">
+            <p class="text-xs text-slate-400 font-medium"><i class="fas fa-info-circle mr-1.5 text-blue-400"></i>เข้าสู่ระบบแอดมินแล้วกดปุ่ม <b>เพิ่มข้อมูลคณะผู้จัดทำ</b> เพื่อเพิ่มสมาชิก</p>
+        </div>
     </main>
 
     <main id="view-join" class="view-section max-w-md w-full mx-auto px-4 py-8 md:py-12">
@@ -1198,8 +1202,9 @@ const firebaseConfig = {
                     <img id="hero-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพหน้าปก">
                     <div id="hero-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
                         <i class="fas fa-cloud-arrow-up text-3xl mb-2"></i>
-                        <span class="text-xs font-bold">คลิกเพื่อเลือกรูปภาพ</span>
-                        <span class="text-[10px] text-slate-400 mt-1">รองรับ JPG, PNG, WebP (ไม่เกิน 4MB)</span>
+                        <span class="text-xs font-bold">คลิกเพื่ออัพโหลดรูปภาพหน้าปก</span>
+                        <span class="text-[10px] text-slate-400 mt-1">รองรับ JPG, PNG, WebP ขนาดไม่เกิน 8MB</span>
+                        <span class="text-[10px] text-blue-400 mt-0.5 font-medium">รูปจะถูก crop และบันทึกใน Cloud อัตโนมัติ</span>
                     </div>
                 </div>
                 <input id="form-hero-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'hero-preview-img', 'hero-upload-placeholder')">
@@ -1224,7 +1229,8 @@ const firebaseConfig = {
                         <img id="news-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพข่าว">
                         <div id="news-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
                             <i class="fas fa-cloud-arrow-up text-2xl mb-1.5"></i>
-                            <span class="text-[11px] font-bold">คลิกเพื่อเลือกรูปภาพ</span>
+                            <span class="text-[11px] font-bold">คลิกเพื่ออัพโหลดรูปข่าว</span>
+                            <span class="text-[9px] text-slate-400 mt-0.5">JPG / PNG / WebP · บันทึกใน Cloud</span>
                         </div>
                     </div>
                     <input id="form-news-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'news-preview-img', 'news-upload-placeholder')">
@@ -1274,7 +1280,7 @@ const firebaseConfig = {
                             <img id="about-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างรูปโปรไฟล์">
                             <i id="about-upload-placeholder" class="fas fa-camera text-slate-400 group-hover:text-blue-500 transition-colors text-lg"></i>
                         </div>
-                        <div class="text-[11px] text-slate-400 leading-relaxed">คลิกที่วงกลมเพื่อเลือกรูปภาพจากเครื่องของคุณ<br>(แนะนำรูปสี่เหลี่ยมจัตุรัส ไม่เกิน 4MB)</div>
+                        <div class="text-[11px] text-slate-400 leading-relaxed">คลิกที่วงกลมเพื่ออัพโหลดรูปโปรไฟล์<br>(แนะนำรูปสี่เหลี่ยมจัตุรัส ไม่เกิน 8MB)<br><span class="text-blue-400 font-semibold">รูปจะถูก crop วงกลม และบันทึกใน Cloud</span></div>
                     </div>
                     <input id="form-about-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'about-preview-img', 'about-upload-placeholder')">
                     <input type="hidden" id="form-about-image">
@@ -1866,11 +1872,9 @@ const districtIssuesData = {
             if (!localStorage.getItem('breathsafe_news')) {
                 localStorage.setItem('breathsafe_news', JSON.stringify([]));
             }
+            // ไม่ seed ข้อมูลสมมุติ — แสดงจาก Firestore จริง หรือว่างเปล่าถ้า admin ยังไม่เพิ่ม
             if (!localStorage.getItem('breathsafe_about')) {
-                const defaultMembers = [
-                    { id: Date.now().toString(), name: "นาย สมชาย พัฒนาดี", nickname: "สมชาย", age: 17, grade: "ม.5/1", school: "โรงเรียนเตรียมอุดมศึกษาภาคใต้", image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80", custom: "ผู้จัดการโครงงาน / Frontend" }
-                ];
-                localStorage.setItem('breathsafe_about', JSON.stringify(defaultMembers));
+                localStorage.setItem('breathsafe_about', JSON.stringify([]));
             }
         }
 
@@ -2542,6 +2546,10 @@ const districtIssuesData = {
             const members = JSON.parse(localStorage.getItem('breathsafe_about') || "[]");
             const container = document.getElementById('about-cards-grid');
             container.innerHTML = '';
+            if (members.length === 0) {
+                container.innerHTML = '<div class="col-span-full flex flex-col items-center justify-center py-24 text-center"><div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4"><i class="fas fa-users"></i></div><p class="text-slate-400 font-bold text-sm">ยังไม่มีข้อมูลคณะผู้จัดทำในระบบ</p></div>';
+                return;
+            }
             
             const lNickname = currentLang === 'th' ? translationDictionary.th["lbl-nickname"] : translationDictionary.en["lbl-nickname"];
             const lAge = currentLang === 'th' ? translationDictionary.th["lbl-age"] : translationDictionary.en["lbl-age"];
@@ -2998,6 +3006,18 @@ const districtIssuesData = {
         // -------------------------------------------------------------
         window.onload = function() {
             // โหลดข้อมูลเริ่มต้นและเรนเดอร์โครงสร้าง UI
+            // ล้างข้อมูลสมมุติเก่าถ้ายังมีค้างอยู่ใน localStorage
+            (function clearFakeAboutData() {
+                const stored = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
+                const hasFakeData = stored.some(m => m.name && (
+                    m.name.includes('สมชาย') ||
+                    m.name.includes('สมหญิง') ||
+                    (m.image && m.image.includes('unsplash.com/photo-1535713875002'))
+                ));
+                if (hasFakeData) {
+                    localStorage.removeItem('breathsafe_about');
+                }
+            })();
             seedInitialData();
             renderHeroCover();
             renderDashboardWidgets();
@@ -3528,14 +3548,19 @@ window.addEventListener('hashchange', () => {
                 : 'fas fa-sun text-yellow-500';
         }
     };
-    // โหลด theme ที่บันทึกไว้
+    // โหลด theme ที่บันทึกไว้ — เปิดเว็บครั้งแรกจะเริ่มเป็น light mode เสมอ
     (function initTheme() {
         const saved = localStorage.getItem('breathsafe_theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (saved === 'dark' || (!saved && prefersDark)) {
+        // เริ่ม dark เฉพาะเมื่อผู้ใช้เคยกดเลือก dark ไว้เองก่อนหน้า
+        if (saved === 'dark') {
             document.documentElement.classList.add('dark');
             const icon = document.getElementById('theme-icon');
             if (icon) icon.className = 'fas fa-moon text-indigo-300';
+        } else {
+            // ไม่ว่าจะเป็นครั้งแรก (ไม่มีค่า) หรือผู้ใช้เลือก light — ให้เป็น light
+            document.documentElement.classList.remove('dark');
+            const icon = document.getElementById('theme-icon');
+            if (icon) icon.className = 'fas fa-sun text-yellow-500';
         }
     })();
 
