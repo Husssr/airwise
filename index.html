@@ -82,6 +82,7 @@ const firebaseConfig = {
                 const members = snap.docs
                     .map(d => ({ id: d.id, ...d.data() }))
                     .sort((a, b) => (a.order || 0) - (b.order || 0));
+                // บันทึกข้อมูลจาก Firestore ทับ localStorage เสมอ (ป้องกันข้อมูลเก่าค้าง)
                 localStorage.setItem('breathsafe_about', JSON.stringify(members));
                 if (typeof renderAboutCards === 'function') renderAboutCards();
             });
@@ -929,11 +930,26 @@ const firebaseConfig = {
             <button id="btn-add-member-card" onclick="openAboutModal()" class="hidden bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition"><i class="fas fa-user-plus mr-1.5"></i><span class="lang-about-add">เพิ่มข้อมูลคณะผู้จัดทำ</span></button>
         </div>
 
+        <div class="relative">
         <div id="about-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             </div>
-        <!-- Admin hint -->
-        <div id="about-admin-hint" class="hidden text-center py-6">
-            <p class="text-xs text-slate-400 font-medium"><i class="fas fa-info-circle mr-1.5 text-blue-400"></i>เข้าสู่ระบบแอดมินแล้วกดปุ่ม <b>เพิ่มข้อมูลคณะผู้จัดทำ</b> เพื่อเพิ่มสมาชิก</p>
+        <!-- Loading state -->
+        <div id="about-loading-state" class="hidden flex-col items-center justify-center py-20 text-center">
+            <div class="flex gap-2 mb-4">
+                <span class="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0s"></span>
+                <span class="w-3 h-3 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0.15s"></span>
+                <span class="w-3 h-3 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0.3s"></span>
+            </div>
+            <p class="text-sm font-bold text-slate-400">กำลังโหลดข้อมูลผู้จัดทำ...</p>
+        </div>
+        <!-- Empty state -->
+        <div id="about-empty-state" class="hidden flex-col items-center justify-center py-20 text-center">
+            <div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4 shadow-inner">
+                <i class="fas fa-users"></i>
+            </div>
+            <p class="text-base font-black text-slate-400 mb-1">ยังไม่มีข้อมูลผู้จัดทำ</p>
+            <p class="text-xs text-slate-300 font-medium">ผู้ดูแลระบบสามารถเพิ่มข้อมูลได้จากปุ่มด้านบน</p>
+        </div>
         </div>
     </main>
 
@@ -1202,9 +1218,8 @@ const firebaseConfig = {
                     <img id="hero-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพหน้าปก">
                     <div id="hero-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
                         <i class="fas fa-cloud-arrow-up text-3xl mb-2"></i>
-                        <span class="text-xs font-bold">คลิกเพื่ออัพโหลดรูปภาพหน้าปก</span>
-                        <span class="text-[10px] text-slate-400 mt-1">รองรับ JPG, PNG, WebP ขนาดไม่เกิน 8MB</span>
-                        <span class="text-[10px] text-blue-400 mt-0.5 font-medium">รูปจะถูก crop และบันทึกใน Cloud อัตโนมัติ</span>
+                        <span class="text-xs font-bold">คลิกเพื่อเลือกรูปภาพ</span>
+                        <span class="text-[10px] text-slate-400 mt-1">รองรับ JPG, PNG, WebP (ไม่เกิน 4MB)</span>
                     </div>
                 </div>
                 <input id="form-hero-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'hero-preview-img', 'hero-upload-placeholder')">
@@ -1229,8 +1244,7 @@ const firebaseConfig = {
                         <img id="news-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างภาพข่าว">
                         <div id="news-upload-placeholder" class="flex flex-col items-center text-slate-400 group-hover:text-blue-500 transition-colors">
                             <i class="fas fa-cloud-arrow-up text-2xl mb-1.5"></i>
-                            <span class="text-[11px] font-bold">คลิกเพื่ออัพโหลดรูปข่าว</span>
-                            <span class="text-[9px] text-slate-400 mt-0.5">JPG / PNG / WebP · บันทึกใน Cloud</span>
+                            <span class="text-[11px] font-bold">คลิกเพื่อเลือกรูปภาพ</span>
                         </div>
                     </div>
                     <input id="form-news-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'news-preview-img', 'news-upload-placeholder')">
@@ -1277,10 +1291,12 @@ const firebaseConfig = {
                     <label class="text-xs font-bold text-slate-600 block">รูปถ่ายส่วนตัวสำหรับการ์ดโปรไฟล์</label>
                     <div class="flex items-center gap-4">
                         <div id="about-upload-zone" onclick="document.getElementById('form-about-file').click()" class="relative w-20 h-20 shrink-0 rounded-full border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer flex items-center justify-center overflow-hidden group">
-                            <img id="about-preview-img" class="hidden absolute inset-0 w-full h-full object-cover" alt="ตัวอย่างรูปโปรไฟล์">
-                            <i id="about-upload-placeholder" class="fas fa-camera text-slate-400 group-hover:text-blue-500 transition-colors text-lg"></i>
+                            <img id="about-preview-img" class="hidden absolute inset-0 w-full h-full object-cover rounded-full" alt="ตัวอย่างรูปโปรไฟล์">
+                            <div id="about-upload-placeholder" class="flex items-center justify-center w-full h-full">
+                                <i class="fas fa-camera text-slate-400 group-hover:text-blue-500 transition-colors text-lg"></i>
+                            </div>
                         </div>
-                        <div class="text-[11px] text-slate-400 leading-relaxed">คลิกที่วงกลมเพื่ออัพโหลดรูปโปรไฟล์<br>(แนะนำรูปสี่เหลี่ยมจัตุรัส ไม่เกิน 8MB)<br><span class="text-blue-400 font-semibold">รูปจะถูก crop วงกลม และบันทึกใน Cloud</span></div>
+                        <div class="text-[11px] text-slate-400 leading-relaxed">คลิกที่วงกลมเพื่อเลือกรูปภาพจากเครื่องของคุณ<br>(แนะนำรูปสี่เหลี่ยมจัตุรัส ไม่เกิน 4MB)</div>
                     </div>
                     <input id="form-about-file" type="file" accept="image/*" class="hidden" onchange="handleImageFileSelect(this, 'about-preview-img', 'about-upload-placeholder')">
                     <input type="hidden" id="form-about-image">
@@ -1872,19 +1888,28 @@ const districtIssuesData = {
             if (!localStorage.getItem('breathsafe_news')) {
                 localStorage.setItem('breathsafe_news', JSON.stringify([]));
             }
-            // ไม่ seed ข้อมูลสมมุติ — ล้าง localStorage เสมอให้ Firestore เป็นแหล่งข้อมูลจริง
-            // (ข้อมูลจะถูก sync จาก Firestore onSnapshot อัตโนมัติ)
-            localStorage.removeItem('breathsafe_about');
+            // ไม่ seed default member แล้ว — ให้แสดง empty state ถ้ายังไม่มีข้อมูล
+            // (Firestore onSnapshot จะอัปเดตให้อัตโนมัติเมื่อโหลดเสร็จ)
         }
 
         // --- 9.2 ระบบจัดการภาพหน้าปก (Hero Section) ---
         // ------------------------------------------------------------------
-        // Cloudinary Upload API (ฟรี, ไม่มีหมดอายุ, เชื่อถือได้)
-        // Cloud name: demobreathsafe  |  Upload preset: breathsafe_unsigned
-        // วิธีตั้งค่า: cloudinary.com → Settings → Upload → Add unsigned preset
         // ------------------------------------------------------------------
-        const CLOUDINARY_CLOUD_NAME = 'dfbmevkc8';
-        const CLOUDINARY_UPLOAD_PRESET = 'breathsafe_upload';
+        // ImgBB Image Upload API  —  key: af42a8978904ab02d636f80488841ed2
+        // docs: https://api.imgbb.com/
+        // แก้ไข: ใช้ Blob upload แทน raw base64 string เพื่อแก้ปัญหา HTTP 400
+        // ------------------------------------------------------------------
+        const IMGBB_API_KEY = 'af42a8978904ab02d636f80488841ed2';
+
+        // แปลง base64 dataURL → Blob object (น่าเชื่อถือกว่าการส่ง raw string)
+        function dataUrlToBlob(dataUrl) {
+            const [header, data] = dataUrl.split(',');
+            const mime = header.match(/:(.*?);/)[1];
+            const binary = atob(data);
+            const arr = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+            return new Blob([arr], { type: mime });
+        }
 
         // Compress รูปก่อน upload — ลดขนาดเพื่อป้องกัน timeout
         async function compressBase64Image(base64DataUrl, maxWidth = 1200, quality = 0.82) {
@@ -1903,69 +1928,64 @@ const districtIssuesData = {
             });
         }
 
-        // แปลง base64 dataURL → Blob object
-        function dataUrlToBlob(dataUrl) {
-            const [header, data] = dataUrl.split(',');
-            const mime = header.match(/:(.*?);/)[1];
-            const binary = atob(data);
-            const arr = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-            return new Blob([arr], { type: mime });
-        }
-
-        // อัปโหลดรูปไป Cloudinary (unsigned upload)
-        // *** unsigned preset ส่งได้แค่ file + upload_preset เท่านั้น ***
-        // *** ห้ามส่ง public_id หรือ folder จะได้ error 403 ***
+        // อัปโหลดรูปไป ImgBB ด้วย base64 string (วิธีมาตรฐานของ ImgBB API)
         async function uploadImageToStorage(base64DataUrl, storagePath) {
-            // 1. Compress ก่อน
+            const imageName = 'breathsafe_' + storagePath.replace(/\//g, '_').replace(/\.jpg$/i, '');
+
+            // 1. Compress ก่อน — ลดขนาดป้องกัน timeout
             const compressed = await compressBase64Image(base64DataUrl);
-            const estimatedKB = Math.round(compressed.length * 0.75 / 1024);
-            console.log(`📤 Cloudinary upload (~${estimatedKB} KB)`);
 
-            // 2. ส่งแค่ file + upload_preset (unsigned ต้องการแค่นี้)
-            const blob = dataUrlToBlob(compressed);
+            // 2. ตัด header ออก → "data:image/jpeg;base64,<BASE64>" → "<BASE64>"
+            const base64Pure = compressed.includes(',') ? compressed.split(',')[1] : compressed;
+            const estimatedKB = Math.round(base64Pure.length * 0.75 / 1024);
+            console.log(`📤 ImgBB upload: ${imageName} (~${estimatedKB} KB)`);
+
+            // 3. ส่งเป็น base64 string ผ่าน FormData (ImgBB API มาตรฐาน)
             const formData = new FormData();
-            formData.append('file', blob, 'image.jpg');
-            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+            formData.append('key', IMGBB_API_KEY);
+            formData.append('image', base64Pure);   // ← base64 string ล้วน ไม่มี header
+            formData.append('name', imageName);
 
-            // 3. Retry สูงสุด 3 ครั้ง
+            // 4. Retry สูงสุด 3 ครั้ง พร้อม exponential backoff
             let lastError;
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
                     const controller = new AbortController();
-                    const tid = setTimeout(() => controller.abort(), 60000);
+                    const tid = setTimeout(() => controller.abort(), 45000);
 
-                    const res = await fetch(
-                        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-                        { method: 'POST', body: formData, signal: controller.signal }
-                    );
+                    const res = await fetch('https://api.imgbb.com/1/image', {
+                        method: 'POST',
+                        body: formData,
+                        signal: controller.signal
+                    });
                     clearTimeout(tid);
 
+                    // อ่าน text ก่อน parse — debug ง่ายขึ้น
                     const text = await res.text();
                     let json;
                     try { json = JSON.parse(text); }
-                    catch (_) { throw new Error(`Cloudinary response error (${res.status}): ${text.slice(0, 200)}`); }
+                    catch (_) { throw new Error(`ImgBB non-JSON (${res.status}): ${text.slice(0, 200)}`); }
 
-                    if (!res.ok || json.error) {
-                        throw new Error(json?.error?.message || `HTTP ${res.status}`);
+                    if (!res.ok || !json.success) {
+                        throw new Error(`ImgBB: ${json?.error?.message || json?.error || `HTTP ${res.status}`}`);
                     }
 
-                    const url = json.secure_url || json.url;
-                    console.log(`✅ Cloudinary OK: ${url}`);
+                    const url = json.data.display_url || json.data.url;
+                    console.log(`✅ ImgBB OK (attempt ${attempt}): ${url}`);
                     return url;
 
                 } catch (err) {
                     lastError = err;
-                    console.warn(`⚠️ Cloudinary attempt ${attempt}/3:`, err.message);
-                    if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
+                    console.warn(`⚠️ ImgBB attempt ${attempt}/3:`, err.message);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
                 }
             }
-            throw new Error(`อัปโหลดไม่สำเร็จ: ${lastError?.message}`);
+            throw new Error(`อัปโหลดไม่สำเร็จ (3 ครั้ง): ${lastError?.message}`);
         }
 
-        // Cloudinary ไม่รองรับ delete จาก client side โดยตรง (ต้องใช้ signed request)
+        // ImgBB free tier ไม่มี delete API
         async function deleteImageFromStorage(_url) {
-            console.info('ℹ️ Cloudinary: delete ไม่รองรับจาก client — Firestore ชี้ URL ใหม่แทน');
+            console.info('ℹ️ ImgBB free: delete ไม่รองรับ — Firestore ชี้ URL ใหม่แทน');
         }
 
         // ------------------------------------------------------------------
@@ -2539,16 +2559,22 @@ const districtIssuesData = {
         window.renderAboutCards = () => {
             const members = JSON.parse(localStorage.getItem('breathsafe_about') || "[]");
             const container = document.getElementById('about-cards-grid');
+            const loadingState = document.getElementById('about-loading-state');
+            const emptyState = document.getElementById('about-empty-state');
             container.innerHTML = '';
+
+            // ซ่อน loading, แสดง empty ถ้าไม่มีสมาชิก
+            if (loadingState) loadingState.classList.add('hidden');
             if (members.length === 0) {
-                // ถ้า Firestore กำลังโหลด ให้แสดง spinner ก่อน ถ้าไม่มีจริงค่อยแสดง empty state
-                const isFirestoreConnected = window.fbDb && window.fbModules;
-                if (isFirestoreConnected) {
-                    container.innerHTML = '<div class="col-span-full flex flex-col items-center justify-center py-24 text-center"><div class="w-16 h-16 flex items-center justify-center mb-4"><div style="border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;width:40px;height:40px;animation:spin-anim 0.8s linear infinite"></div></div><p class="text-slate-400 font-medium text-sm">กำลังโหลดข้อมูล...</p></div>';
-                } else {
-                    container.innerHTML = '<div class="col-span-full flex flex-col items-center justify-center py-24 text-center"><div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4"><i class="fas fa-users"></i></div><p class="text-slate-400 font-bold text-sm">ยังไม่มีข้อมูลคณะผู้จัดทำในระบบ</p></div>';
+                if (emptyState) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.classList.add('flex');
                 }
                 return;
+            }
+            if (emptyState) {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
             }
             
             const lNickname = currentLang === 'th' ? translationDictionary.th["lbl-nickname"] : translationDictionary.en["lbl-nickname"];
@@ -2606,9 +2632,10 @@ const districtIssuesData = {
         window.openAboutModal = () => {
             document.getElementById('form-about-edit-id').value = ''; document.getElementById('form-about-name').value = ''; document.getElementById('form-about-nickname').value = ''; document.getElementById('form-about-age').value = ''; document.getElementById('form-about-grade').value = ''; document.getElementById('form-about-school').value = 'โรงเรียนเตรียมอุดมศึกษาภาคใต้'; document.getElementById('form-about-image').value = ''; document.getElementById('form-about-file').value = ''; document.getElementById('form-about-custom').value = '';
             const previewImg = document.getElementById('about-preview-img');
+            const placeholder = document.getElementById('about-upload-placeholder');
             previewImg.classList.add('hidden');
+            if (placeholder) placeholder.classList.remove('hidden');
             delete previewImg.dataset.base64;
-            document.getElementById('about-upload-placeholder').classList.remove('hidden');
             document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-plus text-blue-500 mr-2"></i>${currentLang === 'th' ? "เพิ่มข้อมูลคณะผู้จัดทำใหม่" : "Add New Member"}`; openModal('modal-admin-about');
         };
 
@@ -3006,14 +3033,26 @@ const districtIssuesData = {
         // -------------------------------------------------------------
         window.onload = function() {
             // โหลดข้อมูลเริ่มต้นและเรนเดอร์โครงสร้าง UI
-            // localStorage ถูกล้างทุกครั้งใน seedInitialData แล้ว
-            // ข้อมูลผู้จัดทำดึงจาก Firestore realtime เท่านั้น
             seedInitialData();
             renderHeroCover();
             renderDashboardWidgets();
             renderAirQualityTable();
             renderNewsCards();
-            renderAboutCards();
+            
+            // แสดง loading state บนหน้า about ถ้า Firebase กำลังโหลด
+            if (window.fbDb) {
+                // Firebase connected — แสดง loading state รอ onSnapshot
+                const loadingState = document.getElementById('about-loading-state');
+                const emptyState = document.getElementById('about-empty-state');
+                const container = document.getElementById('about-cards-grid');
+                if (loadingState) { loadingState.classList.remove('hidden'); loadingState.classList.add('flex'); }
+                if (emptyState) emptyState.classList.add('hidden');
+                if (container) container.innerHTML = '';
+            } else {
+                // ไม่มี Firebase — render จาก localStorage ทันที
+                renderAboutCards();
+            }
+            
             initializeMaps();
             
             // อัปเดตภาษาเริ่มต้นให้เป็นภาษาไทย
@@ -3538,19 +3577,14 @@ window.addEventListener('hashchange', () => {
                 : 'fas fa-sun text-yellow-500';
         }
     };
-    // โหลด theme ที่บันทึกไว้ — เปิดเว็บครั้งแรกจะเริ่มเป็น light mode เสมอ
+    // โหลด theme ที่บันทึกไว้
     (function initTheme() {
         const saved = localStorage.getItem('breathsafe_theme');
-        // เริ่ม dark เฉพาะเมื่อผู้ใช้เคยกดเลือก dark ไว้เองก่อนหน้า
-        if (saved === 'dark') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) {
             document.documentElement.classList.add('dark');
             const icon = document.getElementById('theme-icon');
             if (icon) icon.className = 'fas fa-moon text-indigo-300';
-        } else {
-            // ไม่ว่าจะเป็นครั้งแรก (ไม่มีค่า) หรือผู้ใช้เลือก light — ให้เป็น light
-            document.documentElement.classList.remove('dark');
-            const icon = document.getElementById('theme-icon');
-            if (icon) icon.className = 'fas fa-sun text-yellow-500';
         }
     })();
 
