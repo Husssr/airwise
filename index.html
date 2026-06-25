@@ -4,23 +4,249 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BREATHSAFE - ระบบรายงานคุณภาพอากาศและภูมิสารสนเทศ นครศรีธรรมราช</title>
-
-    <!-- ═══ External CDN Libraries ═══ -->
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCKdLVy7fcWRcAW72zrtR6H1oIrJoPFsQQ",
+  authDomain: "airwise-project-d3556.firebaseapp.com",
+  projectId: "airwise-project-d3556",
+  storageBucket: "airwise-project-d3556.firebasestorage.app",
+  messagingSenderId: "104485361484",
+  appId: "1:104485361484:web:d0e490eed63a11e99861e9",
+  measurementId: "G-HTER90T3GJ"
+};
+
+        let app, auth, db, googleProvider;
+        if(firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY_HERE") {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            googleProvider = new GoogleAuthProvider();
+
+            window.fbAuth = auth;
+            window.fbDb = db;
+            window.googleProvider = googleProvider;
+            window.fbModules = {
+                collection, addDoc, getDocs, deleteDoc, doc, updateDoc, setDoc, getDoc, onSnapshot,
+                createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signOut
+            };
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    const isSystemAdmin = user.email === "admin@breathsafe.app";
+                    setLoginState(isSystemAdmin, user);
+                }
+            });
+
+            // ============================================================
+            // Realtime Listeners — ทุกคนเห็นข้อมูลพร้อมกันทันทีผ่าน Firestore
+            // ============================================================
+
+            // 1) Hero cover
+            onSnapshot(doc(db, 'siteConfig', 'heroCover'), (snap) => {
+                if (snap.exists()) {
+                    const url = snap.data().imageUrl;
+                    if (url) {
+                        localStorage.setItem('breathsafe_hero', url);
+                        renderHeroCoverFromUrl(url);
+                    }
+                }
+            });
+
+            // 2) News — เรียงตาม timestamp ล่าสุดขึ้นก่อน
+            onSnapshot(collection(db, 'news'), (snap) => {
+                const newsList = snap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                localStorage.setItem('breathsafe_news', JSON.stringify(newsList));
+                if (typeof renderNewsCards === 'function') renderNewsCards();
+                if (typeof window.renderNewsAll === 'function') window.renderNewsAll();
+            });
+
+            // 3) About Members — เรียงตาม order
+            onSnapshot(collection(db, 'aboutMembers'), (snap) => {
+                const members = snap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => (a.order || 0) - (b.order || 0));
+                // บันทึกข้อมูลจาก Firestore ทับ localStorage เสมอ (ป้องกันข้อมูลเก่าค้าง)
+                localStorage.setItem('breathsafe_about', JSON.stringify(members));
+                if (typeof renderAboutCards === 'function') renderAboutCards();
+            });
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Sarabun', 'Inter', sans-serif; overflow-x: hidden; }
+        .view-section { display: none; opacity: 0; transform: translateY(15px); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .view-section.active { display: block; opacity: 1; transform: translateY(0); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background-color: transparent; }
+
+        /* ============================================================
+           DARK MODE — smooth transition ทุก element
+           ============================================================ */
+        *, *::before, *::after {
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease, box-shadow 0.3s ease;
+        }
+        /* ยกเว้น element ที่มี transition ของตัวเองอยู่แล้ว */
+        .view-section, #char-svg, .dust-particle, .dust-ring, .dust-orb { transition: unset; }
+        .view-section { transition: opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1); }
+
+        html.dark body { background-color: #0f172a; color: #e2e8f0; }
+        html.dark .bg-white { background-color: #1e293b !important; }
+        html.dark .bg-slate-50, html.dark .bg-slate-50\/80 { background-color: #162032 !important; }
+        html.dark .bg-slate-100 { background-color: #1e293b !important; }
+        html.dark .text-slate-900 { color: #f1f5f9 !important; }
+        html.dark .text-slate-800 { color: #e2e8f0 !important; }
+        html.dark .text-slate-700 { color: #cbd5e1 !important; }
+        html.dark .text-slate-600 { color: #94a3b8 !important; }
+        html.dark .text-slate-500 { color: #64748b !important; }
+        html.dark .border-slate-200, html.dark .border-slate-200\/80, html.dark .border-slate-100 { border-color: #334155 !important; }
+        html.dark header { background-color: #0f172a !important; border-bottom: 1px solid #1e293b; }
+        html.dark #mobile-menu-dropdown { background-color: #1e293b !important; }
+        html.dark .hover\:bg-slate-50:hover { background-color: #1e293b !important; }
+        html.dark .hover\:bg-blue-50:hover { background-color: #1e3a5f !important; }
+        html.dark input, html.dark textarea, html.dark select { background-color: #1e293b !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+        html.dark .shadow-sm, html.dark .shadow-md, html.dark .shadow-lg { box-shadow: 0 2px 12px rgba(0,0,0,0.5) !important; }
+
+        /* Dark mode toggle button */
+        #theme-toggle {
+            position: relative; width: 52px; height: 28px;
+            background: #e2e8f0; border-radius: 99px;
+            cursor: pointer; border: none; outline: none;
+            transition: background 0.35s ease; flex-shrink: 0;
+        }
+        html.dark #theme-toggle { background: #334155; }
+        #theme-toggle-knob {
+            position: absolute; top: 3px; left: 3px;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: white; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), background 0.3s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        html.dark #theme-toggle-knob { transform: translateX(24px); background: #1e293b; }
+
+        /* dust-loading-overlay — defined near element at bottom of body */
+
+        /* ===== 3D Character idle animations ===== */
+        @keyframes charFloat {
+            0%, 100% { transform: translateY(0px); }
+            50%       { transform: translateY(-7px); }
+        }
+        @keyframes charBlink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            94%           { transform: scaleY(0.05); }
+        }
+        @keyframes charBobHead {
+            0%, 100% { transform: rotate(0deg); }
+            25%       { transform: rotate(2deg); }
+            75%       { transform: rotate(-2deg); }
+        }
+        #char-svg {
+            animation: charFloat 3.2s ease-in-out infinite;
+            transform-origin: bottom center;
+        }
+        /* กระพริบตาอัตโนมัติ — ใช้ CSS กับ group ตาทั้งคู่ผ่าน transform */
+        #char-svg .eye-group {
+            animation: charBlink 4s ease-in-out infinite;
+            transform-origin: center 55px;
+        }
+        
+        /* สปินเนอร์ตอนกำลังประมวลผลเปลี่ยนผ่านหน้าจอ */
+        .loader-ring {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #3b82f6;
+            width: 45px; height: 45px;
+            animation: spin-anim 0.8s linear infinite;
+        }
+        @keyframes spin-anim { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* --- [ส่วนเสริม CSS สำหรับปรับแต่งแผนที่ให้ดูมืออาชีพ] --- */
+/* กำหนดความสูงของแผนที่ให้ดูเต็ม */
+#map-view {
+    height: calc(100vh - 150px);
+    position: relative;
+}
+
+/* ปรับแต่งหน้าตา Pop-up ของ Leaflet ให้ดูโมเดิร์นและเข้ากับ Tailwind CSS */
+.custom-leaflet-popup .leaflet-popup-content-wrapper {
+    background: #ffffff;
+    color: #334155; /* slate-700 */
+    border-radius: 16px;
+    padding: 2px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Tailwind shadow-lg */
+    font-family: 'Inter', 'Noto Sans Thai', sans-serif;
+}
+.custom-leaflet-popup .leaflet-popup-tip {
+    background: #ffffff;
+}
+.custom-leaflet-popup .leaflet-popup-content {
+    margin: 12px;
+}
+/* ปรับปรุงปุ่มควบคุม Zoom ให้ดูคลีนขึ้น */
+.leaflet-control-zoom-in, .leaflet-control-zoom-out {
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    margin-bottom: 3px;
+}
+/* ====== Crop Modal Styles ====== */
+#crop-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.75);
+    backdrop-filter: blur(6px);
+    z-index: 99999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+}
+#crop-modal-box {
+    background: #fff;
+    border-radius: 28px;
+    width: 100%; max-width: 520px;
+    box-shadow: 0 32px 64px -12px rgba(0,0,0,0.4);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    max-height: 92vh;
+}
+#crop-image-area {
+    position: relative;
+    background: #0f172a;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+#crop-image-area img {
+    display: block;
+    max-width: 100%;
+    max-height: 360px;
+    width: 100%;
+    object-fit: contain;
+}
+/* Cropper circle overlay สำหรับโหมด about */
+.crop-mode-circle .cropper-view-box,
+.crop-mode-circle .cropper-face {
+    border-radius: 50%;
+}
+.cropper-view-box { outline-color: #3b82f6; }
+.cropper-point { background: #3b82f6; }
+.cropper-line { background: #3b82f6; }
+    </style>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <!-- ═══ Firebase (ES Module — ต้องโหลดก่อนไฟล์อื่น) ═══ -->
-    <script type="module" src="firebase-init.js"></script>
-
-    <!-- ═══ Stylesheet ═══ -->
-    <link rel="stylesheet" href="style.css">
-</head>
 </head>
 <body class="bg-slate-50 min-h-screen flex flex-col text-slate-800 antialiased">
 
@@ -1017,41 +1243,1837 @@
         </div>
     </div>
 
+    <script>
+        // -------------------------------------------------------------
+        // [1] ชุดข้อมูลสถิติมลพิษฝุ่นละออง PM2.5 ประจำทั้ง 23 อำเภอ (นครศรีธรรมราช)
+        // -------------------------------------------------------------
+        // --- [ส่วน Javascript: ระบบควบคุมแผนที่เรียลไทม์และหน้าจอทั้งหมด] ---
 
-    <!-- ═══════════════════════════════════════════════════
-         JavaScript Files — โหลดตามลำดับ dependency
-         ═══════════════════════════════════════════════════ -->
+// 1. [ข้อมูลพื้นฐาน] รายชื่ออำเภอ พิกัด และค่าฝุ่นเริ่มต้น (จะถูก API ทับค่า)
+let districtsData = [
+    { th: "อำเภอเมืองนครศรีธรรมราช", en: "Mueang District", lat: 8.4330, lng: 99.9634, pm25: 15 },
+    { th: "อำเภอพรหมคีรี", en: "Phrom Khiri District", lat: 8.5211, lng: 99.8242, pm25: 15 },
+    { th: "อำเภอลานสกา", en: "Lan Saka District", lat: 8.3242, lng: 99.7891, pm25: 15 },
+    { th: "อำเภอฉวาง", en: "Chawang District", lat: 8.4239, lng: 99.5086, pm25: 15 },
+    { th: "อำเภอพิปูน", en: "Phipun District", lat: 8.5639, lng: 99.5539, pm25: 15 },
+    { th: "อำเภอเชียรใหญ่", en: "Chian Yai District", lat: 8.0833, lng: 100.1167, pm25: 15 },
+    { th: "อำเภอชะอวด", en: "Cha-uat District", lat: 7.9667, lng: 99.9997, pm25: 15 },
+    { th: "อำเภอท่าศาลา", en: "Tha Sala District", lat: 8.6667, lng: 99.9167, pm25: 15 },
+    { th: "อำเภอทุ่งสง", en: "Thung Song District", lat: 8.1667, lng: 99.6833, pm25: 15 },
+    { th: "อำเภอถ้ำพรรณรา", en: "Tham Phannara District", lat: 8.4331, lng: 99.3900, pm25: 15 },
+    { th: "อำเภอทุ่งใหญ่", en: "Thung Yai District", lat: 8.3000, lng: 99.3667, pm25: 15 },
+    { th: "อำเภอบางขัน", en: "Bang Khan District", lat: 8.0167, lng: 99.4667, pm25: 15 },
+    { th: "อำเภอปากพนัง", en: "Pak Phanang District", lat: 8.3500, lng: 100.2000, pm25: 15 },
+    { th: "อำเภอร่อนพิบูลย์", en: "Ron Phibun District", lat: 8.1833, lng: 99.8500, pm25: 15 },
+    { th: "อำเภอสิชล", en: "Sichon District", lat: 8.9167, lng: 99.9000, pm25: 15 },
+    { th: "อำเภอขนอม", en: "Khanom District", lat: 9.2000, lng: 99.8667, pm25: 15 },
+    { th: "อำเภอหัวไทร", en: "Hua Sai District", lat: 7.8833, lng: 100.3167, pm25: 15 },
+    { th: "อำเภอพระพรหม", en: "Phra Phrom District", lat: 8.3000, lng: 99.9167, pm25: 15 },
+    { th: "อำเภอจุฬาภรณ์", en: "Chulabhorn District", lat: 8.0667, lng: 99.8500, pm25: 15 },
+    { th: "อำเภอเฉลิมพระเกียรติ", en: "Chalerm Prakiat District", lat: 8.1281, lng: 100.0381, pm25: 15 },
+    { th: "อำเภอนบพิตำ", en: "Nopphitam District", lat: 8.7119, lng: 99.7547, pm25: 15 },
+    { th: "อำเภอช้างกลาง", en: "Chang Klang District", lat: 8.3578, lng: 99.5583, pm25: 15 },
+    { th: "อำเภอนาบอน", en: "Na Bon District", lat: 8.2667, lng: 99.7833, pm25: 15 }
+];
 
-    <!-- 1. ข้อมูล: อำเภอ, ปัญหาฝุ่น, พจนานุกรมภาษา -->
-    <script src="data.js"></script>
+// 1.1 [ข้อมูลเชิงลึก] ปัญหาฝุ่นหลักและแนวทางแก้ไขรายอำเภอ (ทั้ง 23 อำเภอ)
+const districtIssuesData = {
+    "อำเภอขนอม": { causes: ["ควันดำจากเรือประมงและเรือท่องเที่ยว", "ฝุ่นจากรถยนต์และการคมนาคม", "การเผาเศษวัสดุทางการเกษตร"], solutions: ["ตรวจสภาพเครื่องยนต์เรือและรถยนต์อย่างสม่ำเสมอ", "ลดการเผาในพื้นที่เกษตร", "เพิ่มพื้นที่สีเขียวและต้นไม้ริมถนน"] },
+    "อำเภอสิชล": { causes: ["ควันจากเรือประมง", "ฝุ่นจากรถยนต์", "การเผาเศษวัสดุทางการเกษตร"], solutions: ["ควบคุมควันดำจากเรือและรถยนต์", "ส่งเสริมการทำปุ๋ยหมักแทนการเผา", "เพิ่มการตรวจวัดคุณภาพอากาศ"] },
+    "อำเภอท่าศาลา": { causes: ["ฝุ่นจากรถยนต์", "ควันจากเรือประมง", "การเผาเศษวัสดุทางการเกษตร"], solutions: ["ลดการเผาในพื้นที่เกษตร", "ตรวจสภาพรถยนต์และเรือ", "เพิ่มพื้นที่สีเขียวในชุมชน"] },
+    "อำเภอปากพนัง": { causes: ["โรงงานแปรรูปปลา", "ควันจากเรือประมง", "ฝุ่นจากรถยนต์"], solutions: ["ติดตั้งระบบบำบัดฝุ่นและกลิ่นในโรงงาน", "ควบคุมการปล่อยมลพิษจากเรือ", "ลดการเผาในพื้นที่เกษตร"] },
+    "อำเภอหัวไทร": { causes: ["ควันจากเรือประมง", "ฝุ่นจากรถยนต์", "การเผาเศษวัสดุทางการเกษตร"], solutions: ["ลดการเผาในพื้นที่โล่ง", "ตรวจสภาพเครื่องยนต์เรือและรถ", "เพิ่มพื้นที่สีเขียว"] },
+    "อำเภอเชียรใหญ่": { causes: ["การเผาเศษวัสดุทางการเกษตร", "ฝุ่นจากการคมนาคม"], solutions: ["ส่งเสริมเกษตรปลอดการเผา", "ควบคุมควันดำจากรถยนต์", "รณรงค์ลดการเผาในชุมชน"] },
+    "อำเภอลานสกา": { causes: ["การเผากิ่งไม้และใบไม้ในสวน", "ฝุ่นจากสารเคมีทางการเกษตร"], solutions: ["ทำปุ๋ยหมักจากเศษพืช", "ลดการใช้สารเคมี", "ส่งเสริมเกษตรอินทรีย์"] },
+    "อำเภอพรหมคีรี": { causes: ["การเผาในสวนผลไม้และสวนยาง", "ฝุ่นจากการทำเกษตร"], solutions: ["งดเผาเศษวัสดุทางการเกษตร", "ส่งเสริมการไถกลบ", "ลดการใช้สารเคมี"] },
+    "อำเภอนบพิตำ": { causes: ["การเผาเศษวัสดุทางการเกษตร", "ฝุ่นจากสารเคมี"], solutions: ["ส่งเสริมเกษตรอินทรีย์", "ลดการเผาในสวน", "อนุรักษ์พื้นที่ป่า"] },
+    "อำเภอพิปูน": { causes: ["การเผาในสวนยางพารา", "ฝุ่นจากกิจกรรมเกษตร"], solutions: ["งดการเผาในสวน", "ทำปุ๋ยหมักจากเศษพืช", "เฝ้าระวังไฟป่า"] },
+    "อำเภอฉวาง": { causes: ["โรงงานแปรรูปไม้ยาง", "การเผาเศษวัสดุทางการเกษตร"], solutions: ["ติดตั้งระบบกรองฝุ่นในโรงงาน", "ลดการเผาในสวน", "เพิ่มการตรวจวัดคุณภาพอากาศ"] },
+    "อำเภอถ้ำพรรณรา": { causes: ["การเผาเศษวัสดุทางการเกษตร", "ฝุ่นจากสารเคมี"], solutions: ["ส่งเสริมการทำปุ๋ยหมัก", "ลดการใช้สารเคมี", "ป้องกันไฟป่า"] },
+    "อำเภอช้างกลาง": { causes: ["โรงงานแปรรูปไม้ยาง", "การเผาในสวนผลไม้และสวนยาง"], solutions: ["ควบคุมฝุ่นจากโรงงาน", "ลดการเผาในพื้นที่เกษตร", "ส่งเสริมเกษตรยั่งยืน"] },
+    "อำเภอจุฬาภรณ์": { causes: ["โรงงานแปรรูปไม้ยาง", "การเผาเศษวัสดุทางการเกษตร"], solutions: ["ติดตั้งระบบกรองฝุ่น", "งดการเผาในสวน", "เพิ่มพื้นที่สีเขียว"] },
+    "อำเภอเมืองนครศรีธรรมราช": { causes: ["การจราจรหนาแน่น", "ฝุ่นจากถนน", "ควันจากรถยนต์"], solutions: ["ลดปัญหาการจราจรติดขัด", "ตรวจสภาพรถยนต์", "ล้างถนนและเพิ่มพื้นที่สีเขียว"] },
+    "อำเภอทุ่งสง": { causes: ["โรงงานปูนซีเมนต์", "โรงโม่หิน", "รถบรรทุกขนส่ง"], solutions: ["ติดตั้งระบบดักจับฝุ่น", "ฉีดพ่นน้ำลดฝุ่น", "ควบคุมรถบรรทุก"] },
+    "อำเภอร่อนพิบูลย์": { causes: ["โรงงานปูนซีเมนต์", "โรงโม่หิน", "การระเบิดหินปูน"], solutions: ["ควบคุมการระเบิดหิน", "ติดตั้งระบบกรองฝุ่น", "ตรวจวัดคุณภาพอากาศอย่างต่อเนื่อง"] },
+    "อำเภอทุ่งใหญ่": { causes: ["โรงเลื่อยไม้", "การเผาขยะ"], solutions: ["ควบคุมฝุ่นจากโรงเลื่อย", "งดการเผาขยะ", "ส่งเสริมการคัดแยกขยะ"] },
+    "อำเภอชะอวด": { causes: ["การเผาใบยางพารา", "ไฟป่าพรุ", "ฝุ่นควันข้ามพื้นที่"], solutions: ["งดการเผาใบยาง", "จัดทำแนวกันไฟ", "เฝ้าระวังไฟป่าพรุ"] },
+    "อำเภอบางขัน": { causes: ["การเผาใบยางพารา", "ฝุ่นจากกิจกรรมเกษตร"], solutions: ["ส่งเสริมเกษตรปลอดการเผา", "ทำปุ๋ยหมักจากเศษพืช", "ลดการใช้สารเคมี"] },
+    "อำเภอนาบอน": { causes: ["การเผาเศษวัสดุทางการเกษตร", "ฝุ่นจากการทำเกษตร"], solutions: ["งดการเผาในพื้นที่เกษตร", "ส่งเสริมการใช้ประโยชน์จากเศษวัสดุเหลือใช้", "ลดการใช้สารเคมี"] },
+    "อำเภอพระพรหม": { causes: ["การเผาฟางข้าวหลังเก็บเกี่ยว", "ฝุ่นจากการเกษตร"], solutions: ["ส่งเสริมการไถกลบตอซัง", "งดเผาฟางข้าว", "เพิ่มพื้นที่สีเขียว"] },
+    "อำเภอเฉลิมพระเกียรติ": { causes: ["การเผาฟางข้าวและเศษวัสดุทางการเกษตร", "ฝุ่นจากกิจกรรมเกษตร"], solutions: ["ส่งเสริมเกษตรปลอดการเผา", "ผลิตปุ๋ยหมักจากเศษพืช", "รณรงค์ลดการเผาในชุมชน"] }
+};
 
-    <!-- 2. ตัวแปรสถานะหลักของแอป -->
-    <script src="app-state.js"></script>
+        // -------------------------------------------------------------
+        // [2] พจนานุกรมการแปลสลับภาษาเรียลไทม์ (Comprehensive Translation Dictionary)
+        // -------------------------------------------------------------
+        const translationDictionary = {
+            th: {
+                "nav-home": "<i class='fas fa-home mr-1.5'></i>หน้าแรก", "nav-air": "<i class='fas fa-chart-pie mr-1.5'></i>ข้อมูลคุณภาพอากาศ", "nav-map": "<i class='fas fa-map-marked-alt mr-1.5'></i>แผนที่มลพิษ", "nav-about": "<i class='fas fa-id-card mr-1.5'></i>คณะผู้จัดทำ", "nav-join": "<i class='fas fa-sign-in-alt mr-1.5'></i>เข้าสู่ระบบ",
+                "edit-hero": "เปลี่ยนภาพหน้าปก", "hero-badge": "Nakhon Si Thammarat PM2.5 Watch", "hero-title": "อากาศบริสุทธิ์<br><span class='text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600'>เพื่อชุมชนสุขภาพดี</span>", "hero-desc": "นวัตกรรมระบบฐานข้อมูลภูมิสารสนเทศและการรายงานสถิติฝุ่นละอองขนาดเล็กเรียลไทม์ ครอบคลุมพื้นที่ทั้ง 23 อำเภอ ขับเคลื่อนการเฝ้าระวังโดยโรงเรียนเตรียมอุดมศึกษาภาคใต้", "hero-btn1": "<i class='fas fa-chart-line mr-2'></i>ตรวจสอบรายอำเภอ", "hero-btn2": "<i class='fas fa-map-marked-alt mr-2'></i>เปิดแผนที่ขนาดใหญ่",
+                "dash-status": "<i class='fas fa-gauge-high text-blue-500 mr-2'></i>สถานการณ์ภาพรวมจังหวัด", "dash-aqi": "ค่าเฉลี่ยฝุ่นละออง", "dash-time": "อัปเดต:", "dash-map": "<i class='fas fa-map-location-dot text-blue-500 mr-2'></i>พิกัดความหนาแน่นเชิงพื้นที่", "dash-map-btn": "ขยายแผนที่", "dash-top": "<i class='fas fa-triangle-exclamation text-amber-500 mr-2'></i>พื้นที่เฝ้าระวังค่าฝุ่นสูงสุด", "dash-weather": "สภาพอากาศเฉลี่ย",
+                "news-header": "<i class='fas fa-newspaper text-blue-600 mr-2'></i>ข่าวสารประชาสัมพันธ์และกิจกรรมความเคลื่อนไหว", "news-empty": "ขณะนี้ยังไม่มีข่าวสารหรือประกาศแจ้งเตือนหน้าเว็บไซต์",
+                "air-avg-title": "<i class='fas fa-calculator text-blue-500 mr-2.5'></i>คำนวณค่าดัชนีเฉลี่ยถ่วงน้ำหนักรวมจังหวัด", "air-avg-desc": "ระบบทำการเชื่อมโยงข้อมูลและดึงค่าเฉลี่ยค่าน้ำหนักฝุ่นละอองจากสถานีเครือข่ายชุมชนในพิกัดทั้ง 23 อำเภอของจังหวัดนครศรีธรรมราชแบบเรียลไทม์", "air-table-title": "<i class='fas fa-table-list text-blue-500 mr-2'></i>รายงานดัชนีคุณภาพอากาศแยกตามเขตการปกครอง", "air-hint": "คำแนะนำผู้ใช้งาน: ท่านสามารถคลิกเลือกที่แถวรายชื่อของอำเภอใดๆ ที่ต้องการ เพื่อเข้าสู่โหมดวิเคราะห์ระดับลึก พร้อมรับฟังเสียงสรุปรายงานและคำแนะนำด้านการดูแลสุขภาวะอนามัย", "th-district": "เขตพื้นที่ปกครอง (District)", "th-pm": "ปริมาณฝุ่น PM2.5 (mcg/m³)", "th-status": "เกณฑ์การประเมินสภาวะแวดล้อม", "th-action": "ตัวเลือกการวิเคราะห์",
+                "detail-back": "ย้อนกลับไปตารางสรุปรวม", "detail-sub": "ข้อมูลรายงานจากสถานีเครือข่าย", "detail-rec-title": "<i class='fas fa-user-doctor mr-1.5 text-sm'></i>ข้อแนะนำการปฏิบัติปฏิบัติตนด้านสาธารณสุข", "detail-voice": "รับฟังรายงานเสียงสรุป", "audio-listen": "รับฟังรายงานเสียงสรุป", "audio-stop": "หยุดฟังรายงานเสียง",
+                "detail-cause-title": "ปัญหาหลักที่ก่อให้เกิดฝุ่นในพื้นที่", "detail-solution-title": "แนวทางการแก้ไขปัญหา", "detail-no-data": "ยังไม่มีข้อมูลรายละเอียดสำหรับอำเภอนี้",
+                "map-main-title": "<i class='fas fa-map-location text-blue-500 mr-2'></i>ศูนย์ข้อมูลภูมิสารสนเทศแสดงพิกัดมลพิษสิ่งแวดล้อมทางอากาศ",
+                "about-title": "คณะผู้จัดทำและพัฒนาโครงงาน", "about-desc": "โครงงานระบบฐานข้อมูลสารสนเทศเพื่อความปลอดภัยทางสิ่งแวดล้อม พัฒนาโดยนักเรียนโรงเรียนเตรียมอุดมศึกษาภาคใต้", "about-add": "เพิ่มข้อมูลคณะผู้จัดทำ",
+                "auth-title": "ยืนยันตัวตนเข้าใช้งาน", "auth-subtitle": "ระบบสมาชิกเพื่อบันทึกและติดตามสถิติการรับมลพิษรายวัน", "auth-email": "บัญชีอีเมลผู้ใช้งาน (Email)", "auth-pass": "รหัสผ่านความปลอดภัย (Password)", "auth-btn-in": "ลงชื่อเข้าใช้ระบบ", "auth-btn-up": "สมัครเปิดบัญชีใหม่", "auth-or": "หรือล็อกอินผ่านช่องทาง", "auth-google": "เข้าสู่ระบบด้วยบัญชี Google",
+                "btn-analyze": "วิเคราะห์เชิงลึก", "btn-edit": "แก้ไข", "btn-delete": "ลบ",
+                "lbl-nickname": "ชื่อเล่น:", "lbl-age": "อายุ:", "lbl-years": "ปี", "lbl-grade": "ชั้น ม.:", "lbl-school": "โรงเรียน:",
+                "status-ex": "ดีมาก", "status-g": "ดี", "status-m": "ปานกลาง", "status-u": "เริ่มมีผลกระทบ", "status-h": "อันตราย",
+                "news-view-all": "ดูข่าวทั้งหมด",
+                "join-section-title": "เข้าร่วมเป็นส่วนหนึ่งของการเปลี่ยนแปลง",
+                "join-section-desc": "ร่วมกันเฝ้าระวังคุณภาพอากาศเพื่อชุมชนที่ดีขึ้น เป็นส่วนหนึ่งของเครือข่าย BREATHSAFE",
+                "join-section-btn": "<i class='fas fa-user-plus mr-2'></i>เข้าร่วมเครือข่าย",
+                "join-section-count": "สมาชิกที่เข้าร่วมแล้ว",
+                "map-zoom-nst": "<i class='fas fa-location-crosshairs mr-1.5'></i>นครศรีธรรมราช"
+            },
+            en: {
+                "nav-home": "<i class='fas fa-home mr-1.5'></i>Home", "nav-air": "<i class='fas fa-chart-pie mr-1.5'></i>Air Quality", "nav-map": "<i class='fas fa-map-marked-alt mr-1.5'></i>Pollution Map", "nav-about": "<i class='fas fa-id-card mr-1.5'></i>About Us", "nav-join": "<i class='fas fa-sign-in-alt mr-1.5'></i>Join Us",
+                "edit-hero": "Change Cover", "hero-badge": "Nakhon Si Thammarat PM2.5 Watch", "hero-title": "Clean Air For<br><span class='text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600'>Healthy Communities</span>", "hero-desc": "Innovative Geospatial GIS database and real-time PM2.5 monitoring software covering all 23 districts. Driven by Triam Udom Suksa School of the South.", "hero-btn1": "<i class='fas fa-chart-line mr-2'></i>Check Districts", "hero-btn2": "<i class='fas fa-map-marked-alt mr-2'></i>View GIS Map",
+                "dash-status": "<i class='fas fa-gauge-high text-blue-500 mr-2'></i>Provincial Overview", "dash-aqi": "Average PM2.5", "dash-time": "Updated:", "dash-map": "<i class='fas fa-map-location-dot text-blue-500 mr-2'></i>Density Analysis View", "dash-map-btn": "Expand Map", "dash-top": "<i class='fas fa-triangle-exclamation text-amber-500 mr-2'></i>Highest PM2.5 High Alerts", "dash-weather": "Weather Avg",
+                "news-header": "<i class='fas fa-newspaper text-blue-600 mr-2'></i>Public News & Environment Updates", "news-empty": "Currently, there are no news updates or announcements published on this website.",
+                "air-avg-title": "<i class='fas fa-calculator text-blue-500 mr-2.5'></i>Provincial Weighted PM2.5 Average", "air-avg-desc": "The platform aggregates and calculates the real-time average dust weight distribution directly from community stations across all 23 districts in Nakhon Si Thammarat.", "air-table-title": "<i class='fas fa-table-list text-blue-500 mr-2'></i>Air Quality Index Table by Administrative District", "air-hint": "User Guide: You can click anywhere on a district's row to enter deep analysis mode, trigger AI voice summaries, and read public healthcare recommendations.", "th-district": "District Boundary", "th-pm": "PM2.5 Level (mcg/m³)", "th-status": "Environmental Assessment", "th-action": "Analysis Tools",
+                "detail-back": "Return to Summary Board", "detail-sub": "Live Station Broadcast Network", "detail-rec-title": "<i class='fas fa-user-doctor mr-1.5 text-sm'></i>Public Healthcare Recommendation Advice", "detail-voice": "Listen to AI Audio Summary", "audio-listen": "Listen to AI Summary", "audio-stop": "Stop Audio Playback",
+                "detail-cause-title": "Main Sources of PM2.5 in This Area", "detail-solution-title": "Recommended Solutions", "detail-no-data": "Detailed data is not yet available for this district",
+                "map-main-title": "<i class='fas fa-map-location text-blue-500 mr-2'></i>Geospatial GIS Pollution Map Information Center",
+                "about-title": "Our Innovation Team", "about-desc": "Environmental database management architecture developed by students of Triam Udom Suksa School of the South.", "about-add": "Add Team Member",
+                "auth-title": "User Identity Login", "auth-subtitle": "Member portal to log and track personal daily pollution intake exposure", "auth-email": "Email Address", "auth-pass": "Security Password", "auth-btn-in": "Sign In to Account", "auth-btn-up": "Sign Up Account", "auth-or": "Or Continue With", "auth-google": "Sign In with Google Account",
+                "btn-analyze": "Deep Analysis", "btn-edit": "Edit Data", "btn-delete": "Delete",
+                "lbl-nickname": "Nickname:", "lbl-age": "Age:", "lbl-years": "Y/O", "lbl-grade": "Grade:", "lbl-school": "School:",
+                "status-ex": "Excellent", "status-g": "Good", "status-m": "Moderate", "status-u": "Unhealthy", "status-h": "Hazardous",
+                "news-view-all": "View All News",
+                "join-section-title": "Be Part of the Change",
+                "join-section-desc": "Join our air quality monitoring network and help build a healthier community together with BREATHSAFE.",
+                "join-section-btn": "<i class='fas fa-user-plus mr-2'></i>Join the Network",
+                "join-section-count": "Members Joined",
+                "map-zoom-nst": "<i class='fas fa-location-crosshairs mr-1.5'></i>Nakhon Si Thammarat"
+            }
+        };
 
-    <!-- 3. ประเมินระดับ PM2.5 -->
-    <script src="air-quality.js"></script>
+        // -------------------------------------------------------------
+        // [3] ตัวแปรควบคุมสถานะแอปพลิเคชันหลัก (App State Variables)
+        // -------------------------------------------------------------
+        let currentLang = "th";
+        let isUserAdmin = false;
+        let mainMapInstance = null;
+        let homeMiniMapInstance = null;
+        let mainMapMarkersArray = [];
+        let miniMapMarkersArray = [];
+        let currentlySelectedDistrictIndex = null;
+        let currentSpeechInstance = null;
+        let isAudioPlayingState = false;
 
-    <!-- 4. ระบบเสียง AI TTS + หน้ารายละเอียดอำเภอ -->
-    <script src="speech.js"></script>
+        // -------------------------------------------------------------
+        // [4] (router หลักอยู่ด้านล่างสุดของไฟล์ ใช้ระบบ URL Hash)
+        // -------------------------------------------------------------
 
-    <!-- 5. GIS Map Engine (Leaflet) -->
-    <script src="map.js"></script>
+        // -------------------------------------------------------------
+        // [5] ฟังก์ชันวิเคราะห์คำนวณและประเมินเกณฑ์ค่าฝุ่นละออง (AI Analytical Core)
+        // -------------------------------------------------------------
+        function evaluatePm25Tier(pm25Value) {
+            if (pm25Value <= 15) return {
+                tierTh: translationDictionary.th["status-ex"], tierEn: translationDictionary.en["status-ex"], hexColor: "#06b6d4",
+                adviceTh: "ดัชนีอากาศบริสุทธิ์ดีเยี่ยม เหมาะสมต่อการจัดกิจกรรมในพื้นที่โล่งแจ้ง สตรีมีครรภ์และผู้สูงอายุสามารถสูดอากาศภายนอกอาคารได้อย่างปลอดภัยอย่างสมบูรณ์",
+                adviceEn: "Excellent air quality. Ambient air poses no health risks. Highly recommended for any outdoor sports and school recreational activities."
+            };
+            if (pm25Value <= 25) return {
+                tierTh: translationDictionary.th["status-g"], tierEn: translationDictionary.en["status-g"], hexColor: "#10b981",
+                adviceTh: "เกณฑ์คุณภาพอากาศดี สามารถเดินทางและทำกิจวัตรนอกอาคารได้ตามปกติ สภาพบรรยากาศปลอดภัยต่อระบบทางเดินหายใจ",
+                adviceEn: "Good air quality. Atmospheric conditions are well within safe thresholds. Outdoor exercises and daily routines can be performed freely."
+            };
+            if (pm25Value <= 37) return {
+                tierTh: translationDictionary.th["status-m"], tierEn: translationDictionary.en["status-m"], hexColor: "#eab308",
+                adviceTh: "ระดับคุณภาพอากาศปานกลาง ประชาชนทั่วไปสามารถทำกิจกรรมได้ตามปกติ แต่ผู้ป่วยโรคปอดอุดกั้นเรื้อรังหรือหอบหืดควรลดเวลาสัมผัสควันฝุ่นนอกบ้าน",
+                adviceEn: "Moderate air quality. Acceptable for the general population. Sensitive groups with respiratory illness should minimize extended outdoor exertion."
+            };
+            if (pm25Value <= 75) return {
+                tierTh: translationDictionary.th["status-u"], tierEn: translationDictionary.en["status-u"], hexColor: "#f97316",
+                adviceTh: "คุณภาพอากาศเริ่มมีผลกระทบต่อสุขภาพ ประชาชนควรสวมหน้ากากอนามัยป้องกันฝุ่นละอองทุกครั้งเมื่อออกนอกบ้าน และงดกิจกรรมหนักกลางแจ้ง",
+                adviceEn: "Unhealthy level of air dust. Respiratory irritation possible. Wear protective filtering masks and restrict prolonged outdoor activities."
+            };
+            return {
+                tierTh: translationDictionary.th["status-h"], tierEn: translationDictionary.en["status-h"], hexColor: "#ef4444",
+                adviceTh: "ภาวะวิกฤตอันตรายร้ายแรงต่อสุขภาพ ควรงดออกนอกอาคาร ปิดประตูหน้าต่างให้มิดชิด เปิดระบบเครื่องฟอกอากาศ และคอยสังเกตอาการผิดปกติอย่างใกล้ชิด",
+                adviceEn: "Hazardous condition. Severe environmental warning. Avoid all outdoor exposures. Stay inside closed air-filtered environments immediately."
+            };
+        }
 
-    <!-- 6. เปลี่ยนภาษา + แสดงผล Dashboard -->
-    <script src="ui-render.js"></script>
+        // -------------------------------------------------------------
+        // [5.1] เรนเดอร์การ์ดปัญหาฝุ่นหลักและแนวทางแก้ไขรายอำเภอ
+        // -------------------------------------------------------------
+        function renderDistrictIssuesPanel(targetDistrict) {
+            const causeListEl = document.getElementById('detail-cause-list');
+            const solutionListEl = document.getElementById('detail-solution-list');
+            const issues = districtIssuesData[targetDistrict.th];
 
-    <!-- 7. อัปโหลดรูป + Cropper + Hero/ข่าว/คณะผู้จัดทำ CRUD -->
-    <script src="upload.js"></script>
+            causeListEl.innerHTML = "";
+            solutionListEl.innerHTML = "";
 
-    <!-- 8. Firebase Auth + Login State + Modal + Bootstrap + Router -->
-    <script src="auth.js"></script>
+            if (!issues) {
+                const noDataMsg = translationDictionary[currentLang]["detail-no-data"];
+                causeListEl.innerHTML = `<li class="list-none">${noDataMsg}</li>`;
+                solutionListEl.innerHTML = `<li class="list-none">${noDataMsg}</li>`;
+                return;
+            }
 
-    <!-- 9. API จริง: PM2.5, Weather, Extra AQ, Member Count, News All -->
-    <script src="api.js"></script>
+            issues.causes.forEach(item => {
+                const li = document.createElement('li');
+                li.innerText = item;
+                causeListEl.appendChild(li);
+            });
+            issues.solutions.forEach(item => {
+                const li = document.createElement('li');
+                li.innerText = item;
+                solutionListEl.appendChild(li);
+            });
+        }
 
-    <!-- 10. Cookie Banner -->
-    <script src="cookie.js"></script>
+        // -------------------------------------------------------------
+        // [6] โมดูลจัดการหน้าต่างเจาะลึกและฟังก์ชันควบคุมเสียงบรรยาย AI
+        // -------------------------------------------------------------
+        window.enterDistrictDeepAnalysisView = function(districtIndex) {
+            currentlySelectedDistrictIndex = districtIndex;
+            const targetDistrict = districtsData[districtIndex];
+            const assessment = evaluatePm25Tier(targetDistrict.pm25);
+            
+            document.getElementById('detail-title-name').innerText = currentLang === 'th' ? targetDistrict.th : targetDistrict.en;
+            document.getElementById('detail-pm-display').innerText = targetDistrict.pm25;
+            
+            const pillBadge = document.getElementById('detail-status-pill');
+            pillBadge.innerText = currentLang === 'th' ? assessment.tierTh : assessment.tierEn;
+            pillBadge.style.backgroundColor = assessment.hexColor;
+            
+            document.getElementById('detail-accent-bar').style.backgroundColor = assessment.hexColor;
+            document.getElementById('detail-gauge-frame').style.borderColor = assessment.hexColor;
+            document.getElementById('detail-rec-text').innerText = currentLang === 'th' ? assessment.adviceTh : assessment.adviceEn;
+            
+            renderDistrictIssuesPanel(targetDistrict);
+            
+            switchView('district-detail');
+        };
 
+        window.toggleSpeechSynthesis = function() {
+            if (currentlySelectedDistrictIndex === null) return;
+            
+            if (isAudioPlayingState) {
+                terminateSpeechAudio();
+            } else {
+                executeSpeechAudioPlayback();
+            }
+        };
+
+        // แบ่งสคริปต์เป็นประโยคย่อยๆ สำหรับซับไตเติล (รองรับทั้งไทยและอังกฤษ)
+        function splitIntoSubtitleChunks(text) {
+            // แบ่งข้อความเป็นประโยคย่อยๆ สำหรับแสดงเป็น subtitle ทีละชิ้น
+            return text
+                .split(/(?<=[.!?:.])\s+|(?<=[\u0E00-\u0E7F])\s{2,}|\n+/)
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+        }
+
+        let mascotMouthInterval = null;
+        let mascotBlinkTimeout = null;
+
+        // ขยับปากตัวการ์ตูนระหว่างพูด (สลับระหว่าง mouth-open และ mouth-closed ตามจังหวะแบบธรรมชาติ)
+        function startMascotTalking() {
+            const mouthClosed = document.getElementById('mouth-closed');
+            const mouthOpen   = document.getElementById('mouth-open');
+            const mouthTeeth  = document.getElementById('mouth-teeth');
+            const mouthTongue = document.getElementById('mouth-tongue');
+            const bubble      = document.getElementById('char-speaking-bubble');
+            if (!mouthClosed) return;
+            if (bubble) bubble.classList.remove('hidden');
+            stopMascotTalking();
+            let mouthIsOpen = false;
+            mascotMouthInterval = setInterval(() => {
+                if (!window.speechSynthesis.speaking) return;
+                mouthIsOpen = !mouthIsOpen;
+                if (mouthIsOpen) {
+                    mouthClosed.classList.add('hidden');
+                    mouthOpen.classList.remove('hidden');
+                    mouthTeeth.classList.remove('hidden');
+                    // ลิ้นโชว์เป็นครั้งคราวให้ดูน่ารัก
+                    if (mouthTongue) mouthTongue.classList.toggle('hidden', Math.random() > 0.4);
+                    // สุ่มขนาดปาก ry ให้ดูเป็นธรรมชาติ
+                    const openness = (4 + Math.random() * 5).toFixed(1);
+                    mouthOpen.setAttribute('ry', openness);
+                    if (mouthTeeth) mouthTeeth.setAttribute('cy', (parseFloat(mouthOpen.getAttribute('cy')) - parseFloat(openness) * 0.55).toFixed(1));
+                } else {
+                    mouthClosed.classList.remove('hidden');
+                    mouthOpen.classList.add('hidden');
+                    mouthTeeth.classList.add('hidden');
+                    if (mouthTongue) mouthTongue.classList.add('hidden');
+                }
+            }, 110);
+        }
+
+        function stopMascotTalking() {
+            if (mascotMouthInterval) { clearInterval(mascotMouthInterval); mascotMouthInterval = null; }
+            const mouthClosed = document.getElementById('mouth-closed');
+            const mouthOpen   = document.getElementById('mouth-open');
+            const mouthTeeth  = document.getElementById('mouth-teeth');
+            const mouthTongue = document.getElementById('mouth-tongue');
+            const bubble      = document.getElementById('char-speaking-bubble');
+            if (mouthClosed) mouthClosed.classList.remove('hidden');
+            if (mouthOpen)   mouthOpen.classList.add('hidden');
+            if (mouthTeeth)  mouthTeeth.classList.add('hidden');
+            if (mouthTongue) mouthTongue.classList.add('hidden');
+            if (bubble)      bubble.classList.add('hidden');
+        }
+
+        // กระพริบตาเป็นช่วงๆ ให้ตัวการ์ตูนดูมีชีวิตชีวา (ไม่ได้ใช้กับ SVG ตัวการ์ตูนใหม่ที่ไม่มี mascot-eyes แต่ไว้สำรอง)
+        function scheduleMascotBlink() {
+            // ตัวการ์ตูนใหม่ใช้ CSS animation แทน JS blink ตรงนี้จึงไม่ต้องทำอะไร
+            mascotBlinkTimeout = setTimeout(scheduleMascotBlink, 3000 + Math.random() * 2000);
+        }
+
+        function stopMascotBlink() {
+            if (mascotBlinkTimeout) { clearTimeout(mascotBlinkTimeout); mascotBlinkTimeout = null; }
+        }
+
+        function executeSpeechAudioPlayback() {
+            terminateSpeechAudio();
+            const currentDistrict = districtsData[currentlySelectedDistrictIndex];
+            const evaluation = evaluatePm25Tier(currentDistrict.pm25);
+            const issues = districtIssuesData[currentDistrict.th];
+            const speechLocaleCode = currentLang === 'th' ? 'th-TH' : 'en-US';
+            let speechStringText = '';
+
+            if (currentLang === 'th') {
+                const causesText = issues ? issues.causes.join(' และ ') : 'ไม่มีข้อมูล';
+                const solutionsText = issues ? issues.solutions.join(' ') : 'ไม่มีข้อมูล';
+                speechStringText = `สวัสดีค่ะ! หนูจะรายงานคุณภาพอากาศของพื้นที่ ${currentDistrict.th} นะคะ. ตรวจวัดปริมาณฝุ่นละอองพีเอ็มสองจุดห้าได้ ${currentDistrict.pm25} ไมโครกรัมต่อลูกบาศก์เมตร. เกณฑ์การประเมินอยู่ในระดับ ${evaluation.tierTh}. ข้อแนะนำด้านสาธารณสุขคือ ${evaluation.adviceTh}. ปัญหาหลักในพื้นที่ได้แก่ ${causesText}. แนวทางการแก้ไขปัญหาคือ ${solutionsText}. ขอบคุณที่รับฟังค่ะ!`;
+            } else {
+                const causesText = issues ? issues.causes.join(', and ') : 'no data';
+                const solutionsText = issues ? issues.solutions.join(' ') : 'no data';
+                speechStringText = `Hello! I will report the air quality for ${currentDistrict.en}. PM 2.5 concentration is ${currentDistrict.pm25} micrograms per cubic meter. Status: ${evaluation.tierEn}. Health advice: ${evaluation.adviceEn}. Main causes: ${causesText}. Solutions: ${solutionsText}. Thank you!`;
+            }
+
+            const subtitleChunks = splitIntoSubtitleChunks(speechStringText);
+            let chunkStartPositions = [];
+            let searchCursor = 0;
+            subtitleChunks.forEach(chunk => {
+                const idx = speechStringText.indexOf(chunk, searchCursor);
+                chunkStartPositions.push(idx >= 0 ? idx : searchCursor);
+                searchCursor = (idx >= 0 ? idx : searchCursor) + chunk.length;
+            });
+
+            const subtitleEl = document.getElementById('speech-subtitle');
+            if (subtitleEl) subtitleEl.innerHTML = `<span class="text-blue-700">${subtitleChunks[0] || ''}</span>`;
+
+            currentSpeechInstance = new SpeechSynthesisUtterance(speechStringText);
+            currentSpeechInstance.lang = speechLocaleCode;
+            currentSpeechInstance.rate = 1.0;
+            currentSpeechInstance.pitch = 1.4;
+
+            const preferredVoice = pickFriendliestVoice(speechLocaleCode);
+            if (preferredVoice) currentSpeechInstance.voice = preferredVoice;
+
+            let currentChunkIndex = 0;
+            currentSpeechInstance.onboundary = (event) => {
+                const pos = event.charIndex;
+                while (currentChunkIndex < chunkStartPositions.length - 1 && pos >= chunkStartPositions[currentChunkIndex + 1]) {
+                    currentChunkIndex++;
+                }
+                if (subtitleEl) subtitleEl.innerHTML = `<span class="text-blue-700">${subtitleChunks[currentChunkIndex] || ''}</span>`;
+            };
+            currentSpeechInstance.onstart = () => { startMascotTalking(); };
+            currentSpeechInstance.onend = () => {
+                if (subtitleEl) subtitleEl.innerHTML = '<span class="text-slate-500">✅ จบการรายงาน</span>';
+                setTimeout(() => { if (subtitleEl) subtitleEl.textContent = 'กดปุ่มด้านล่างเพื่อให้น้องอ่านสรุปให้ฟัง 🎙️'; }, 2500);
+                resetAudioPlaybackUIState(false);
+            };
+            currentSpeechInstance.onerror = () => { resetAudioPlaybackUIState(false); };
+
+            window.speechSynthesis.speak(currentSpeechInstance);
+            resetAudioPlaybackUIState(true);
+        }
+
+        // เลือกเสียงพูดที่ฟังดูสดใส/เหมาะกับเด็กที่สุดจากรายการเสียงที่เครื่องผู้ใช้มีอยู่
+        function pickFriendliestVoice(localeCode) {
+            const voices = window.speechSynthesis.getVoices();
+            if (!voices || voices.length === 0) return null;
+            const langPrefix = localeCode.split('-')[0];
+            const sameLangVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix));
+            if (sameLangVoices.length === 0) return null;
+            // เรียงให้เสียงที่มีคำว่า child/kid/female/Google ขึ้นก่อน (มักฟังดูสดใสกว่าเสียงมาตรฐาน)
+            const priorityKeywords = ['child', 'kid', 'female', 'girl', 'google', 'natural'];
+            sameLangVoices.sort((a, b) => {
+                const score = (v) => priorityKeywords.reduce((acc, kw) => acc + (v.name.toLowerCase().includes(kw) ? 1 : 0), 0);
+                return score(b) - score(a);
+            });
+            return sameLangVoices[0];
+        }
+        // เบราว์เซอร์บางตัวโหลดรายชื่อเสียงแบบ async ต้อง trigger ล่วงหน้าเพื่อให้ getVoices() พร้อมใช้งานทันที
+        if (typeof window.speechSynthesis !== 'undefined') {
+            window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+        }
+
+        function terminateSpeechAudio() {
+            window.speechSynthesis.cancel();
+            resetAudioPlaybackUIState(false);
+        }
+
+        function resetAudioPlaybackUIState(isPlaying) {
+            isAudioPlayingState = isPlaying;
+            const btnIcon = document.getElementById('audio-icon');
+            const btnText = document.getElementById('audio-text');
+            
+            if (isPlaying) {
+                if (btnIcon) btnIcon.className = "fas fa-circle-stop text-rose-500 animate-pulse";
+                if (btnText) btnText.innerText = currentLang === 'th' ? translationDictionary.th["audio-stop"] : translationDictionary.en["audio-stop"];
+            } else {
+                if (btnIcon) btnIcon.className = "fas fa-volume-high";
+                if (btnText) btnText.innerText = currentLang === 'th' ? translationDictionary.th["audio-listen"] : translationDictionary.en["audio-listen"];
+                stopMascotTalking();
+            }
+        }
+        // -------------------------------------------------------------
+        // [7] เครื่องยนต์จำลองระบบแผนที่ภูมิสารสนเทศ (GIS Mapping Engine)
+        // -------------------------------------------------------------
+        function initializeMaps() {
+            // ศูนย์กลางพิกัดจังหวัดนครศรีธรรมราช
+            const nstCenter = [8.4333, 99.9667]; 
+            
+            // 7.1 สร้างแผนที่จิ๋วในหน้าแรก (Home Mini Map)
+            homeMiniMapInstance = L.map('home-mini-map', { zoomControl: false, attributionControl: false }).setView(nstCenter, 8);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(homeMiniMapInstance);
+
+            // 7.2 สร้างแผนที่ขนาดใหญ่หน้าหลัก (Main Map)
+            mainMapInstance = L.map('full-screen-gis-map').setView(nstCenter, 9);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors & CARTO'
+            }).addTo(mainMapInstance);
+
+            // วาดหมุดข้อมูลทั้ง 23 อำเภอครั้งแรก
+            renderAllMapMarkers();
+        }
+
+        // ฟังก์ชันวาดหมุดทั้งหมดลงบนแผนที่ (เรียกได้ซ้ำทุกครั้งที่ข้อมูล PM2.5 อัปเดตจาก API จริง)
+        function renderAllMapMarkers() {
+            if (!mainMapInstance || !homeMiniMapInstance) return;
+
+            // ลบหมุดเก่าทั้งหมดออกก่อนวาดใหม่ ป้องกันหมุดซ้อนกัน
+            mainMapMarkersArray.forEach(m => mainMapInstance.removeLayer(m));
+            miniMapMarkersArray.forEach(m => homeMiniMapInstance.removeLayer(m));
+            mainMapMarkersArray = [];
+            miniMapMarkersArray = [];
+
+            districtsData.forEach((district, index) => {
+                const assess = evaluatePm25Tier(district.pm25);
+                
+                // ออกแบบไอคอนหมุดแผนที่ให้แสดงตัวเลขค่าฝุ่น
+                const customIconHtml = `
+                    <div style="background-color: ${assess.hexColor}; color: white; border: 2px solid white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 11px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transform: translate(-50%, -50%);">
+                        ${district.pm25}
+                    </div>
+                    <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${assess.hexColor}; position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);"></div>
+                `;
+
+                const markerIcon = L.divIcon({ html: customIconHtml, className: 'custom-gis-marker', iconSize: [32, 32] });
+
+                const mapPopupTemplate = `
+                    <div class="text-center p-2 space-y-2 min-w-[150px]">
+                        <h4 class="font-black text-sm text-slate-800">${district.th}</h4>
+                        <div class="text-2xl font-black" style="color: ${assess.hexColor}">${district.pm25} <span class="text-[9px] text-slate-400">mcg/m³</span></div>
+                        <div class="text-[10px] font-bold text-white px-2 py-1 rounded-full uppercase" style="background-color: ${assess.hexColor}">${assess.tierTh}</div>
+                        <button onclick="enterDistrictDeepAnalysisView(${index})" class="mt-2 w-full bg-slate-900 text-white text-[10px] font-bold py-1.5 rounded-lg hover:bg-slate-800 transition">วิเคราะห์เชิงลึก</button>
+                    </div>
+                `;
+
+                const mainMarker = L.marker([district.lat, district.lng], { icon: markerIcon }).addTo(mainMapInstance).bindPopup(mapPopupTemplate);
+                const miniMarker = L.marker([district.lat, district.lng], { icon: markerIcon }).addTo(homeMiniMapInstance);
+
+                mainMapMarkersArray.push(mainMarker);
+                miniMapMarkersArray.push(miniMarker);
+            });
+        }
+
+        // -------------------------------------------------------------
+        // [8] เครื่องยนต์เปลี่ยนภาษาและการแสดงผล UI หลัก (Render Engine)
+        // -------------------------------------------------------------
+        window.changeLanguage = function(langCode) {
+            currentLang = langCode;
+            document.documentElement.lang = currentLang;
+            
+            // ปรับเปลี่ยนข้อความแบบคงที่ตามพจนานุกรม
+            for (const key in translationDictionary[currentLang]) {
+                const elements = document.querySelectorAll(`.lang-${key}`);
+                elements.forEach(el => { el.innerHTML = translationDictionary[currentLang][key]; });
+            }
+
+            // เรนเดอร์ส่วนประกอบระบบใหม่เพื่อให้ข้อมูลอัปเดตภาษา
+            renderDashboardWidgets();
+            renderAirQualityTable();
+            renderNewsCards();
+            renderAboutCards();
+            
+            // กรณีเปิดหน้าต่างรายละเอียดค้างไว้ ให้รีเซ็ตข้อความด้วย
+            if (currentlySelectedDistrictIndex !== null) {
+                resetAudioPlaybackUIState(isAudioPlayingState);
+                const targetDistrict = districtsData[currentlySelectedDistrictIndex];
+                document.getElementById('detail-title-name').innerText = currentLang === 'th' ? targetDistrict.th : targetDistrict.en;
+                const assess = evaluatePm25Tier(targetDistrict.pm25);
+                document.getElementById('detail-status-pill').innerText = currentLang === 'th' ? assess.tierTh : assess.tierEn;
+                document.getElementById('detail-rec-text').innerText = currentLang === 'th' ? assess.adviceTh : assess.adviceEn;
+                renderDistrictIssuesPanel(targetDistrict);
+            }
+        };
+
+
+        function renderDashboardWidgets() {
+            // คำนวณค่าฝุ่นเฉลี่ยจังหวัด
+            const totalPm25 = districtsData.reduce((sum, d) => sum + d.pm25, 0);
+            const avgPm25 = Math.round(totalPm25 / districtsData.length);
+            const avgAssess = evaluatePm25Tier(avgPm25);
+
+            document.getElementById('overall-pm25-val').innerText = avgPm25;
+            document.getElementById('air-provincial-avg').innerText = avgPm25;
+            document.getElementById('overall-status-text').innerText = currentLang === 'th' ? avgAssess.tierTh : avgAssess.tierEn;
+            document.getElementById('overall-card-bg').style.backgroundColor = avgAssess.hexColor;
+
+            // อัปเดตเวลาเรียลไทม์จำลอง
+            const now = new Date();
+            document.getElementById('current-time-widget').innerText = now.toLocaleString(currentLang === 'th' ? 'th-TH' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
+
+            // ดึง 3 พื้นที่เสี่ยงสูงสุด (Top 3 Risk Areas)
+            const sortedDistricts = [...districtsData].sort((a, b) => b.pm25 - a.pm25).slice(0, 3);
+            const topRiskContainer = document.getElementById('top-risk-container');
+            topRiskContainer.innerHTML = '';
+            
+            sortedDistricts.forEach((dist, i) => {
+                const a = evaluatePm25Tier(dist.pm25);
+                const distName = currentLang === 'th' ? dist.th : dist.en;
+                topRiskContainer.innerHTML += `
+                    <div class="flex justify-between items-center p-2 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100 transition cursor-pointer" onclick="enterDistrictDeepAnalysisView(${districtsData.findIndex(d => d.th === dist.th)})">
+                        <div class="flex items-center"><span class="w-5 h-5 rounded-full text-[10px] text-white flex items-center justify-center font-black mr-2 shadow-sm" style="background-color: ${a.hexColor}">${i+1}</span> <span class="truncate max-w-[120px] text-slate-700">${distName}</span></div>
+                        <div class="font-black text-slate-900">${dist.pm25} <span class="text-[9px] font-bold text-slate-400 font-normal">mcg</span></div>
+                    </div>
+                `;
+            });
+
+            // อัปเดตจำนวนสมาชิก
+            updateJoinMemberCount();
+        }
+
+        // ===== ซูมแผนที่กลับไปที่นครศรีธรรมราช =====
+        window.zoomToNakhonSiThammarat = function() {
+            const nstCenter = [8.4333, 99.9667];
+            if (!mainMapInstance) return;
+            mainMapInstance.flyTo(nstCenter, 9, {
+                animate: true,
+                duration: 1.4,
+                easeLinearity: 0.3
+            });
+        };
+
+        // ===== ดึงจำนวนสมาชิก (นับจาก Firestore users collection หรือ fallback) =====
+        async function updateJoinMemberCount() {
+            const countEl = document.getElementById('join-member-count');
+            if (!countEl) return;
+            try {
+                if (window.fbDb && window.fbModules) {
+                    // นับ documents ใน "users" collection (Firebase Auth users ที่บันทึก profile)
+                    // ถ้ายังไม่มี collection ให้ fallback เป็น 0
+                    const snap = await window.fbModules.getDocs(window.fbModules.collection(window.fbDb, 'users'));
+                    countEl.textContent = snap.size.toLocaleString();
+                } else {
+                    countEl.textContent = '0';
+                }
+            } catch (_) {
+                countEl.textContent = '0';
+            }
+        }
+
+        function renderAirQualityTable() {
+            const tableBody = document.getElementById('main-district-table');
+            tableBody.innerHTML = '';
+            
+            districtsData.forEach((district, index) => {
+                const assess = evaluatePm25Tier(district.pm25);
+                const name = currentLang === 'th' ? district.th : district.en;
+                const assessTier = currentLang === 'th' ? assess.tierTh : assess.tierEn;
+                const analyzeBtnText = currentLang === 'th' ? translationDictionary.th["btn-analyze"] : translationDictionary.en["btn-analyze"];
+                
+                tableBody.innerHTML += `
+                    <tr class="hover:bg-slate-50/80 transition-colors duration-200 cursor-pointer border-b border-slate-50" onclick="enterDistrictDeepAnalysisView(${index})">
+                        <td class="p-4 pl-6 font-bold text-slate-800">${name}</td>
+                        <td class="p-4 text-center"><span class="font-black text-lg text-slate-900">${district.pm25}</span></td>
+                        <td class="p-4"><span class="px-3 py-1.5 rounded-lg text-[10px] font-black text-white uppercase tracking-wider shadow-sm" style="background-color: ${assess.hexColor};">${assessTier}</span></td>
+                        <td class="p-4 text-center">
+                            <button class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm hover:text-blue-600 hover:border-blue-200 transition"><i class="fas fa-magnifying-glass-chart mr-1.5"></i>${analyzeBtnText}</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // -------------------------------------------------------------
+        // [9] ระบบจัดการข้อมูลอัตโนมัติ (Hybrid LocalStorage & Memory CRUD)
+        // -------------------------------------------------------------
+        
+        // --- 9.1 โหลดข้อมูลจำลองเมื่อเปิดระบบครั้งแรก (หากไม่มีข้อมูล) ---
+        function seedInitialData() {
+            if (!localStorage.getItem('breathsafe_hero')) {
+                localStorage.setItem('breathsafe_hero', 'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?q=80&w=1200&auto=format&fit=crop');
+            }
+            if (!localStorage.getItem('breathsafe_news')) {
+                localStorage.setItem('breathsafe_news', JSON.stringify([]));
+            }
+            // ไม่ seed default member แล้ว — ให้แสดง empty state ถ้ายังไม่มีข้อมูล
+            // (Firestore onSnapshot จะอัปเดตให้อัตโนมัติเมื่อโหลดเสร็จ)
+        }
+
+        // --- 9.2 ระบบจัดการภาพหน้าปก (Hero Section) ---
+        // ------------------------------------------------------------------
+        // ------------------------------------------------------------------
+        // ------------------------------------------------------------------
+        // Cloudinary Unsigned Upload — ใช้ preset "breathsafe_upload"
+        // Cloud name : dfbmevkc8  |  Preset : breathsafe_upload (Unsigned)
+        // Asset folder ตั้งไว้ที่ "breathsafe" ใน Cloudinary Console แล้ว
+        // ไม่ต้องใช้ API Secret — ปลอดภัยใส่ใน frontend ได้
+        // ------------------------------------------------------------------
+        const _CLD = {
+            cloud:  'dfbmevkc8',
+            preset: 'breathsafe_upload',
+        };
+        const _CLD_URL = `https://api.cloudinary.com/v1_1/${_CLD.cloud}/image/upload`;
+
+        // Compress รูปก่อน upload
+        async function compressBase64Image(base64DataUrl, maxWidth = 1200, quality = 0.82) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => resolve(base64DataUrl);
+                img.src = base64DataUrl;
+            });
+        }
+
+        // base64 dataURL → Blob
+        function _b64ToBlob(dataUrl) {
+            const [hdr, b64] = dataUrl.split(',');
+            const mime = hdr.match(/:(.*?);/)[1];
+            const raw  = atob(b64);
+            const arr  = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+            return new Blob([arr], { type: mime });
+        }
+
+        // อัปโหลดรูปไป Cloudinary (Unsigned — ไม่ต้อง key ลับ)
+        async function uploadImageToStorage(base64DataUrl, storagePath) {
+            // public_id เช่น "hero/cover" → เก็บใน folder "breathsafe/hero/cover"
+            // (Cloudinary เติม asset folder "breathsafe" ให้อัตโนมัติจาก preset)
+            const publicId = storagePath.replace(/\.jpg$/i, '');
+
+            const compressed   = await compressBase64Image(base64DataUrl);
+            const estimatedKB  = Math.round(compressed.length * 0.75 / 1024);
+            console.log(`📤 Cloudinary upload: ${publicId} (~${estimatedKB} KB)`);
+
+            const fd = new FormData();
+            fd.append('file',           _b64ToBlob(compressed), 'image.jpg');
+            fd.append('upload_preset',  _CLD.preset);
+            fd.append('public_id',      publicId);
+
+            let lastError;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const ctrl = new AbortController();
+                    const tid  = setTimeout(() => ctrl.abort(), 60000);
+
+                    const res  = await fetch(_CLD_URL, { method: 'POST', body: fd, signal: ctrl.signal });
+                    clearTimeout(tid);
+
+                    const text = await res.text();
+                    let json;
+                    try { json = JSON.parse(text); }
+                    catch (_) { throw new Error(`Cloudinary non-JSON (${res.status}): ${text.slice(0,200)}`); }
+
+                    if (!res.ok || json.error) {
+                        throw new Error(json?.error?.message || `HTTP ${res.status}`);
+                    }
+
+                    const url = json.secure_url;
+                    console.log(`✅ Cloudinary OK (attempt ${attempt}): ${url}`);
+                    return url;
+
+                } catch (err) {
+                    lastError = err;
+                    console.warn(`⚠️ Cloudinary attempt ${attempt}/3:`, err.message);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
+                }
+            }
+            throw new Error(`อัปโหลดไม่สำเร็จ: ${lastError?.message}`);
+        }
+
+        // Cloudinary unsigned ไม่รองรับ delete จาก browser — Firestore ชี้ URL ใหม่แทน
+        async function deleteImageFromStorage(_url) {
+            console.info('ℹ️ Cloudinary: ชี้ URL ใหม่แทนการลบ');
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: แสดงรูปหน้าปกจาก URL
+        // ------------------------------------------------------------------
+        function renderHeroCoverFromUrl(url) {
+            if (!url) return;
+            const el = document.getElementById('hero-section');
+            if (el) el.style.backgroundImage = `linear-gradient(to right, rgba(255,255,255,0.96) 35%, rgba(255,255,255,0.2)), url('${url}')`;
+        }
+        function renderHeroCover() {
+            renderHeroCoverFromUrl(localStorage.getItem('breathsafe_hero'));
+        }
+        window.openHeroModal = () => {
+            const existing = localStorage.getItem('breathsafe_hero');
+            const previewImg = document.getElementById('hero-preview-img');
+            const placeholder = document.getElementById('hero-upload-placeholder');
+            document.getElementById('form-hero-file').value = '';
+            if (existing) {
+                previewImg.src = existing;
+                previewImg.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                previewImg.dataset.base64 = existing;
+            } else {
+                previewImg.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+                delete previewImg.dataset.base64;
+            }
+            openModal('modal-admin-hero');
+        };
+        window.processSaveHeroBanner = async () => {
+            const previewImg = document.getElementById('hero-preview-img');
+            const base64Data = previewImg.dataset.base64;
+            if (!base64Data) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่ได้เลือกรูปภาพ' : 'No image selected', text: currentLang === 'th' ? 'กรุณาเลือกรูปภาพหน้าปกก่อนบันทึก' : 'Please choose a cover image first.', confirmButtonColor: '#3b82f6' });
+
+            // แสดง loading
+            showDustLoading(); closeActiveModal('modal-admin-hero');
+
+            try {
+                // อัปโหลดรูปไป Firebase Storage (path คงที่ — ทับรูปเก่าเสมอ)
+                const imageUrl = await uploadImageToStorage(base64Data, 'hero/cover.jpg');
+
+                if (window.fbDb && window.fbModules) {
+                    // บันทึก URL ลง Firestore document "siteConfig/heroCover"
+                    // onSnapshot ด้านบนจะ trigger renderHeroCoverFromUrl อัตโนมัติสำหรับทุก session
+                    await window.fbModules.setDoc(
+                        window.fbModules.doc(window.fbDb, 'siteConfig', 'heroCover'),
+                        { imageUrl, updatedAt: Date.now() }
+                    );
+                } else {
+                    // Offline fallback
+                    localStorage.setItem('breathsafe_hero', imageUrl);
+                    renderHeroCoverFromUrl(imageUrl);
+                }
+
+                hideDustLoading();
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ! 🎉' : 'Saved! 🎉', text: currentLang === 'th' ? 'เปลี่ยนภาพหน้าปกเรียบร้อย — ผู้ใช้ทุกคนจะเห็นทันที' : 'Cover updated — all users will see it now.', timer: 2000, showConfirmButton: false });
+            } catch (err) {
+                console.error('processSaveHeroBanner error:', err);
+                hideDustLoading();
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'อัปโหลดไม่สำเร็จ' : 'Upload Failed', text: err.message, confirmButtonColor: '#ef4444' });
+            }
+        };
+
+        // -------------------------------------------------------------
+        // ระบบ Image Cropper แบบ Interactive (ไม่ใช้ library ภายนอก)
+        // รองรับ 3 mode: 16:9 (hero/news), 1:1 circle (about member)
+        // -------------------------------------------------------------
+        let _cropState = {
+            img: null, previewImgId: null, placeholderId: null,
+            mode: '16:9', isCircle: false,
+            // drag state
+            dragging: false, resizing: false, resizeHandle: null,
+            startX: 0, startY: 0,
+            // crop box (normalised 0-1 relative to canvas display size)
+            box: { x: 0, y: 0, w: 0, h: 0 },
+            // canvas display scale: natural → displayed
+            scale: 1
+        };
+
+        function handleImageFileSelect(inputEl, previewImgId, placeholderId) {
+            const file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'ไฟล์ไม่ถูกต้อง' : 'Invalid file', text: currentLang === 'th' ? 'กรุณาเลือกไฟล์รูปภาพเท่านั้น' : 'Please select an image file.', confirmButtonColor: '#ef4444' });
+                inputEl.value = ''; return;
+            }
+            if (file.size > 8 * 1024 * 1024) {
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'ไฟล์ใหญ่เกินไป' : 'File too large', text: currentLang === 'th' ? 'ขนาดไฟล์ต้องไม่เกิน 8MB' : 'File size must not exceed 8MB.', confirmButtonColor: '#ef4444' });
+                inputEl.value = ''; return;
+            }
+
+            // กำหนด mode และ aspect ratio ตามช่องที่อัปโหลด
+            const isAbout = previewImgId === 'about-preview-img';
+            const isHero  = previewImgId === 'hero-preview-img';
+            const isNews  = previewImgId === 'news-preview-img';
+            _cropState.mode     = isAbout ? '1:1' : '16:9';
+            _cropState.isCircle = isAbout;
+            _cropState.outputW  = isAbout ? 400 : (isHero ? 1280 : 960);
+            _cropState.outputH  = isAbout ? 400 : (isHero ? 720  : 540);
+            _cropState.previewImgId  = previewImgId;
+            _cropState.placeholderId = placeholderId;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    _cropState.img = img;
+                    _openCropModal();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            inputEl.value = ''; // reset input ให้เลือกซ้ำได้
+        }
+
+        function _openCropModal() {
+            const modal = document.getElementById('crop-modal');
+            const canvas = document.getElementById('crop-canvas');
+            const label  = document.getElementById('crop-mode-label');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            label.textContent = _cropState.isCircle
+                ? 'โปรไฟล์วงกลม (1:1)'
+                : (_cropState.outputW === 1280 ? 'หน้าปกเว็บ (16:9)' : 'รูปข่าว (16:9)');
+
+            // ปรับขนาด canvas ให้พอดีหน้าจอ
+            requestAnimationFrame(() => _initCropCanvas(canvas));
+        }
+
+        function _initCropCanvas(canvas) {
+            const img = _cropState.img;
+            const container = canvas.parentElement;
+            const maxW = Math.min(container.clientWidth - 8, 680);
+            const maxH = Math.min(window.innerHeight * 0.55, 420);
+            const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+            const dW = Math.round(img.naturalWidth  * scale);
+            const dH = Math.round(img.naturalHeight * scale);
+
+            canvas.width  = dW;
+            canvas.height = dH;
+            _cropState.scale = scale;
+
+            // คำนวณ crop box เริ่มต้นให้พอดี aspect ratio กึ่งกลางรูป
+            const ar = _cropState.outputW / _cropState.outputH; // เช่น 16/9 หรือ 1
+            let bW, bH;
+            if (dW / dH > ar) { bH = dH * 0.9; bW = bH * ar; }
+            else               { bW = dW * 0.9; bH = bW / ar; }
+            bW = Math.round(bW); bH = Math.round(bH);
+            _cropState.box = {
+                x: Math.round((dW - bW) / 2),
+                y: Math.round((dH - bH) / 2),
+                w: bW, h: bH
+            };
+            _drawCrop(canvas);
+            _attachCropEvents(canvas);
+        }
+
+        function _drawCrop(canvas) {
+            const ctx = canvas.getContext('2d');
+            const { img, box, isCircle, scale } = _cropState;
+            const dW = canvas.width, dH = canvas.height;
+
+            // วาดรูปต้นฉบับ
+            ctx.clearRect(0, 0, dW, dH);
+            ctx.drawImage(img, 0, 0, dW, dH);
+
+            // overlay มืดนอก crop box
+            ctx.fillStyle = 'rgba(0,0,0,0.52)';
+            ctx.fillRect(0, 0, dW, dH);
+
+            // เปิดแสงใน crop box
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(box.x + box.w/2, box.y + box.h/2, box.w/2, box.h/2, 0, 0, Math.PI*2);
+                ctx.fill();
+            } else {
+                ctx.fillRect(box.x, box.y, box.w, box.h);
+            }
+            ctx.restore();
+
+            // วาดรูปกลับมาใน crop box เพื่อให้เห็นสีจริง
+            ctx.save();
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(box.x + box.w/2, box.y + box.h/2, box.w/2, box.h/2, 0, 0, Math.PI*2);
+                ctx.clip();
+            } else {
+                ctx.beginPath();
+                ctx.rect(box.x, box.y, box.w, box.h);
+                ctx.clip();
+            }
+            ctx.drawImage(img, 0, 0, dW, dH);
+            ctx.restore();
+
+            // เส้นขอบ crop box
+            ctx.strokeStyle = '#60A5FA';
+            ctx.lineWidth = 2;
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(box.x + box.w/2, box.y + box.h/2, box.w/2, box.h/2, 0, 0, Math.PI*2);
+                ctx.stroke();
+            } else {
+                ctx.strokeRect(box.x, box.y, box.w, box.h);
+                // Rule of thirds grid
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 0.8;
+                for (let i=1; i<3; i++) {
+                    const gx = box.x + box.w*(i/3), gy = box.y + box.h*(i/3);
+                    ctx.beginPath(); ctx.moveTo(gx, box.y); ctx.lineTo(gx, box.y+box.h); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(box.x, gy); ctx.lineTo(box.x+box.w, gy); ctx.stroke();
+                }
+            }
+
+            // corner handles (ไม่แสดงถ้าเป็น circle)
+            if (!isCircle) {
+                const handles = _getHandles();
+                ctx.fillStyle = '#ffffff';
+                ctx.strokeStyle = '#3B82F6';
+                ctx.lineWidth = 2;
+                handles.forEach(h => {
+                    ctx.beginPath();
+                    ctx.arc(h.x, h.y, 6, 0, Math.PI*2);
+                    ctx.fill(); ctx.stroke();
+                });
+            } else {
+                // วงกลม: แสดง 4 handle resize รอบวง
+                const cx = box.x + box.w/2, cy = box.y + box.h/2, r = box.w/2;
+                [[cx, cy-r],[cx, cy+r],[cx-r, cy],[cx+r, cy]].forEach(([hx, hy]) => {
+                    ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI*2);
+                    ctx.fillStyle='#fff'; ctx.fill();
+                    ctx.strokeStyle='#3B82F6'; ctx.lineWidth=2; ctx.stroke();
+                });
+            }
+        }
+
+        function _getHandles() {
+            const { box } = _cropState;
+            return [
+                { id:'tl', x: box.x,           y: box.y            },
+                { id:'tr', x: box.x + box.w,    y: box.y            },
+                { id:'bl', x: box.x,             y: box.y + box.h   },
+                { id:'br', x: box.x + box.w,     y: box.y + box.h   },
+            ];
+        }
+
+        function _getCanvasPos(canvas, e) {
+            const rect = canvas.getBoundingClientRect();
+            const src = e.touches ? e.touches[0] : e;
+            return { x: (src.clientX - rect.left) * (canvas.width / rect.width), y: (src.clientY - rect.top) * (canvas.height / rect.height) };
+        }
+
+        function _hitHandle(pos) {
+            const handles = _cropState.isCircle
+                ? (() => {
+                    const {box} = _cropState;
+                    const cx=box.x+box.w/2, cy=box.y+box.h/2, r=box.w/2;
+                    return [{id:'t',x:cx,y:cy-r},{id:'b',x:cx,y:cy+r},{id:'l',x:cx-r,y:cy},{id:'r',x:cx+r,y:cy}];
+                  })()
+                : _getHandles();
+            for (const h of handles) {
+                if (Math.hypot(pos.x-h.x, pos.y-h.y) < 12) return h.id;
+            }
+            return null;
+        }
+
+        function _insideBox(pos) {
+            const {box} = _cropState;
+            return pos.x >= box.x && pos.x <= box.x+box.w && pos.y >= box.y && pos.y <= box.y+box.h;
+        }
+
+        function _attachCropEvents(canvas) {
+            // ลบ listener เก่าก่อน (clone trick)
+            const fresh = canvas.cloneNode(true);
+            canvas.parentNode.replaceChild(fresh, canvas);
+            const c = document.getElementById('crop-canvas');
+
+            const onStart = (e) => {
+                e.preventDefault();
+                const pos = _getCanvasPos(c, e);
+                const handle = _hitHandle(pos);
+                if (handle) {
+                    _cropState.resizing = true; _cropState.resizeHandle = handle;
+                } else if (_insideBox(pos)) {
+                    _cropState.dragging = true;
+                }
+                _cropState.startX = pos.x; _cropState.startY = pos.y;
+                _cropState.boxSnap = { ..._cropState.box };
+            };
+            const onMove = (e) => {
+                e.preventDefault();
+                if (!_cropState.dragging && !_cropState.resizing) return;
+                const pos = _getCanvasPos(c, e);
+                const dx = pos.x - _cropState.startX, dy = pos.y - _cropState.startY;
+                const W = c.width, H = c.height;
+                const snap = _cropState.boxSnap;
+                const ar = _cropState.outputW / _cropState.outputH;
+
+                if (_cropState.dragging) {
+                    _cropState.box.x = Math.max(0, Math.min(W - snap.w, snap.x + dx));
+                    _cropState.box.y = Math.max(0, Math.min(H - snap.h, snap.y + dy));
+                } else if (_cropState.resizing) {
+                    let { x, y, w, h } = snap;
+                    const MIN = 40;
+                    const h_id = _cropState.resizeHandle;
+
+                    if (_cropState.isCircle) {
+                        // สำหรับ circle: ขยายจาก center
+                        const cx = x + w/2, cy = y + h/2;
+                        let newR;
+                        if (h_id==='t'||h_id==='b') newR = Math.abs((h_id==='t' ? snap.y+snap.h/2-pos.y : pos.y-snap.y-snap.h/2));
+                        else                         newR = Math.abs((h_id==='l' ? snap.x+snap.w/2-pos.x : pos.x-snap.x-snap.w/2));
+                        newR = Math.max(MIN/2, newR);
+                        const maxR = Math.min(cx, W-cx, cy, H-cy);
+                        newR = Math.min(newR, maxR);
+                        _cropState.box = { x: cx-newR, y: cy-newR, w: newR*2, h: newR*2 };
+                    } else {
+                        // สำหรับ rectangle: lock aspect ratio
+                        if (h_id==='br') { w = Math.max(MIN, snap.w+dx); h = w/ar; }
+                        else if (h_id==='bl') { w = Math.max(MIN, snap.w-dx); h = w/ar; x = snap.x + snap.w - w; }
+                        else if (h_id==='tr') { w = Math.max(MIN, snap.w+dx); h = w/ar; y = snap.y + snap.h - h; }
+                        else if (h_id==='tl') { w = Math.max(MIN, snap.w-dx); h = w/ar; x = snap.x+snap.w-w; y = snap.y+snap.h-h; }
+                        // clamp ไม่ให้เกินขอบ canvas
+                        if (x < 0) { w += x; h = w/ar; x = 0; }
+                        if (y < 0) { h += y; w = h*ar; y = 0; }
+                        if (x+w > W) { w = W-x; h = w/ar; }
+                        if (y+h > H) { h = H-y; w = h*ar; }
+                        _cropState.box = { x, y, w: Math.max(MIN,w), h: Math.max(MIN/ar,h) };
+                    }
+                }
+                _drawCrop(c);
+            };
+            const onEnd = () => { _cropState.dragging = false; _cropState.resizing = false; };
+
+            c.addEventListener('mousedown',  onStart);
+            c.addEventListener('mousemove',  onMove);
+            c.addEventListener('mouseup',    onEnd);
+            c.addEventListener('touchstart', onStart, { passive: false });
+            c.addEventListener('touchmove',  onMove,  { passive: false });
+            c.addEventListener('touchend',   onEnd);
+        }
+
+        window.applyCrop = function() {
+            const canvas = document.getElementById('crop-canvas');
+            const { img, box, isCircle, outputW, outputH, previewImgId, placeholderId, scale } = _cropState;
+
+            // สร้าง output canvas ด้วยขนาดจริงที่กำหนด (ไม่ใช่ขนาด display)
+            const outCanvas = document.createElement('canvas');
+            outCanvas.width  = outputW;
+            outCanvas.height = outputH;
+            const ctx = outCanvas.getContext('2d');
+
+            // แปลง crop box จาก canvas display coordinates → natural image coordinates
+            const srcX = Math.round(box.x / scale);
+            const srcY = Math.round(box.y / scale);
+            const srcW = Math.round(box.w / scale);
+            const srcH = Math.round(box.h / scale);
+
+            if (isCircle) {
+                ctx.beginPath();
+                ctx.ellipse(outputW/2, outputH/2, outputW/2, outputH/2, 0, 0, Math.PI*2);
+                ctx.clip();
+            }
+            ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outputW, outputH);
+
+            const dataUrl = outCanvas.toDataURL('image/jpeg', 0.88);
+
+            // ใส่ลง preview
+            const previewImg = document.getElementById(previewImgId);
+            const placeholder = document.getElementById(placeholderId);
+            previewImg.src = dataUrl;
+            previewImg.dataset.base64 = dataUrl;
+            previewImg.classList.remove('hidden');
+            if (placeholder) placeholder.classList.add('hidden');
+
+            // ใส่ใน hidden input (สำหรับ news / about)
+            if (previewImgId === 'news-preview-img') document.getElementById('form-news-image').value = dataUrl;
+            if (previewImgId === 'about-preview-img') document.getElementById('form-about-image').value = dataUrl;
+
+            // ปิด modal
+            document.getElementById('crop-modal').classList.add('hidden');
+            document.getElementById('crop-modal').classList.remove('flex');
+        };
+
+        window.closeCropModal = function() {
+            document.getElementById('crop-modal').classList.add('hidden');
+            document.getElementById('crop-modal').classList.remove('flex');
+        };
+
+        // --- 9.3 ระบบจัดการข่าวสาร (News Engine) ---
+        window.renderNewsCards = () => {
+            const newsData = JSON.parse(localStorage.getItem('breathsafe_news') || "[]");
+            const container = document.getElementById('news-grid-container');
+            const emptyState = document.getElementById('news-empty-state');
+            container.innerHTML = '';
+            
+            if (newsData.length === 0) {
+                emptyState.classList.remove('hidden'); container.classList.add('hidden');
+            } else {
+                emptyState.classList.add('hidden'); container.classList.remove('hidden');
+                newsData.forEach(news => {
+                    const editButtons = isUserAdmin ? `
+                        <div class="absolute top-3 right-3 flex space-x-1.5 z-20">
+                            <button onclick="editNewsRecord('${news.id}', event)" class="w-8 h-8 bg-white/90 backdrop-blur rounded-lg text-blue-600 shadow flex items-center justify-center hover:bg-blue-50 transition"><i class="fas fa-pen text-xs"></i></button>
+                            <button onclick="deleteNewsRecord('${news.id}', event)" class="w-8 h-8 bg-white/90 backdrop-blur rounded-lg text-rose-600 shadow flex items-center justify-center hover:bg-rose-50 transition"><i class="fas fa-trash text-xs"></i></button>
+                        </div>
+                    ` : '';
+
+                    container.innerHTML += `
+                        <div onclick="viewFullNews('${news.id}')" class="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer relative flex flex-col h-full">
+                            ${editButtons}
+                            <div class="h-44 w-full overflow-hidden relative">
+                                <img src="${news.image}" alt="News" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                                <div class="absolute inset-0 bg-gradient-to-t from-slate-900/50 to-transparent"></div>
+                            </div>
+                            <div class="p-5 flex-grow flex flex-col">
+                                <div class="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-2 bg-blue-50 w-max px-2.5 py-1 rounded-md"><i class="fas fa-clock mr-1"></i>${news.date}</div>
+                                <h4 class="font-black text-slate-900 text-sm leading-snug mb-2 line-clamp-2">${news.title}</h4>
+                                <p class="text-xs text-slate-500 line-clamp-2 font-medium flex-grow">${news.desc}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        };
+
+        window.openNewsModal = () => {
+            document.getElementById('form-news-edit-id').value = '';
+            document.getElementById('form-news-title').value = '';
+            document.getElementById('form-news-desc').value = '';
+            document.getElementById('form-news-image').value = '';
+            document.getElementById('form-news-file').value = '';
+            document.getElementById('form-news-date').value = '';
+            const previewImg = document.getElementById('news-preview-img');
+            previewImg.classList.add('hidden');
+            delete previewImg.dataset.base64;
+            document.getElementById('news-upload-placeholder').classList.remove('hidden');
+            document.getElementById('news-modal-title').innerHTML = `<i class="fas fa-bullhorn text-blue-500 mr-2"></i>${currentLang === 'th' ? "เขียนข่าวประกาศประชาสัมพันธ์ใหม่" : "Create New Announcement"}`;
+            openModal('modal-admin-news');
+        };
+        
+        window.processSaveNewsRecord = async () => {
+            const id = document.getElementById('form-news-edit-id').value;
+            const title = document.getElementById('form-news-title').value.trim();
+            const desc = document.getElementById('form-news-desc').value.trim();
+            const date = document.getElementById('form-news-date').value;
+            // รูปภาพ: ถ้ามี base64 ใหม่ (จากการ crop) ให้ upload; ถ้าไม่มีแต่เป็นการ edit ให้ใช้ URL เดิม
+            const previewImg = document.getElementById('news-preview-img');
+            const newBase64 = previewImg.dataset.base64 || '';
+            const existingUrl = document.getElementById('form-news-image').value.trim();
+            const isBase64 = newBase64.startsWith('data:');
+
+            if (!title || !desc || !date) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณากรอกข้อมูลให้ครบทุกช่อง' : 'Please fill in all fields.', confirmButtonColor: '#3b82f6' });
+            if (!isBase64 && !existingUrl) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ยังไม่มีรูปภาพ' : 'No image', text: currentLang === 'th' ? 'กรุณาอัปโหลดและครอปรูปภาพก่อนบันทึก' : 'Please upload and crop an image first.', confirmButtonColor: '#3b82f6' });
+
+            showDustLoading(); closeActiveModal('modal-admin-news');
+
+            try {
+                let imageUrl = existingUrl;
+
+                if (isBase64) {
+                    // อัปโหลดรูปใหม่ไป Cloudinary
+                    const timestamp = Date.now();
+                    const storagePath = `news/${id || timestamp}.jpg`;
+                    imageUrl = await uploadImageToStorage(newBase64, storagePath);
+                }
+
+                const newsData = { title, desc, image: imageUrl, date, timestamp: Date.now() };
+
+                if (window.fbDb && window.fbModules) {
+                    if (id) {
+                        // แก้ไขข่าวเดิม (update document ที่มี id นั้น)
+                        await window.fbModules.updateDoc(
+                            window.fbModules.doc(window.fbDb, 'news', id), newsData
+                        );
+                    } else {
+                        // เพิ่มข่าวใหม่ (Firestore จะสร้าง id ให้อัตโนมัติ)
+                        await window.fbModules.addDoc(
+                            window.fbModules.collection(window.fbDb, 'news'), newsData
+                        );
+                    }
+                    // onSnapshot จะ trigger renderNewsCards() อัตโนมัติ ไม่ต้อง call เอง
+                } else {
+                    // Offline fallback
+                    let list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+                    if (id) { const i = list.findIndex(n => n.id === id); if (i > -1) list[i] = { id, ...newsData }; }
+                    else list.unshift({ id: Date.now().toString(), ...newsData });
+                    localStorage.setItem('breathsafe_news', JSON.stringify(list));
+                    renderNewsCards();
+                }
+
+                hideDustLoading();
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ! 🎉' : 'Saved! 🎉', text: currentLang === 'th' ? 'ข่าวถูกเผยแพร่แล้ว — ผู้ใช้ทุกคนจะเห็นทันที' : 'News published — all users will see it now.', timer: 2000, showConfirmButton: false });
+            } catch (err) {
+                console.error('processSaveNewsRecord error:', err);
+                hideDustLoading();
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'อัปโหลดไม่สำเร็จ' : 'Upload Failed', text: err.message, confirmButtonColor: '#ef4444' });
+            }
+        };
+
+        window.editNewsRecord = (id, event) => {
+            event.stopPropagation();
+            const newsList = JSON.parse(localStorage.getItem('breathsafe_news') || "[]");
+            const news = newsList.find(n => n.id === id);
+            if(news) {
+                document.getElementById('form-news-edit-id').value = news.id;
+                document.getElementById('form-news-title').value = news.title;
+                document.getElementById('form-news-desc').value = news.desc;
+                document.getElementById('form-news-image').value = news.image;
+                document.getElementById('form-news-file').value = '';
+                document.getElementById('form-news-date').value = news.date;
+                const previewImg = document.getElementById('news-preview-img');
+                previewImg.src = news.image;
+                previewImg.dataset.base64 = news.image;
+                previewImg.classList.remove('hidden');
+                document.getElementById('news-upload-placeholder').classList.add('hidden');
+                document.getElementById('news-modal-title').innerHTML = `<i class="fas fa-pen text-amber-500 mr-2"></i>${currentLang === 'th' ? "แก้ไขข่าวสาร" : "Edit Announcement"}`;
+                openModal('modal-admin-news');
+            }
+        };
+
+        window.deleteNewsRecord = async (id, event) => {
+            event.stopPropagation();
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: currentLang === 'th' ? 'ยืนยันการลบข่าว' : 'Confirm Delete',
+                text: currentLang === 'th' ? 'ต้องการลบข่าวสารนี้ออกจากระบบหรือไม่? ไม่สามารถกู้คืนได้' : 'Delete this news permanently? This cannot be undone.',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: currentLang === 'th' ? '✕ ลบเลย' : 'Yes, delete',
+                cancelButtonText: currentLang === 'th' ? 'ยกเลิก' : 'Cancel'
+            });
+            if (!result.isConfirmed) return;
+
+            try {
+                if (window.fbDb && window.fbModules) {
+                    // หา imageUrl ก่อนลบ เพื่อลบรูปใน Storage ด้วย
+                    const newsList = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+                    const targetNews = newsList.find(n => n.id === id);
+                    if (targetNews?.image) await deleteImageFromStorage(targetNews.image);
+                    await window.fbModules.deleteDoc(window.fbModules.doc(window.fbDb, 'news', id));
+                    // onSnapshot จะ trigger renderNewsCards() อัตโนมัติ
+                } else {
+                    let list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+                    localStorage.setItem('breathsafe_news', JSON.stringify(list.filter(n => n.id !== id)));
+                    renderNewsCards();
+                }
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'ลบสำเร็จ' : 'Deleted', timer: 1200, showConfirmButton: false });
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Error', text: err.message, confirmButtonColor: '#ef4444' });
+            }
+        };
+
+        window.viewFullNews = (id) => {
+            const newsList = JSON.parse(localStorage.getItem('breathsafe_news') || "[]");
+            const news = newsList.find(n => n.id === id);
+            if(news) {
+                document.getElementById('view-news-img').src = news.image;
+                document.getElementById('view-news-date').innerText = news.date;
+                document.getElementById('view-news-title').innerText = news.title;
+                document.getElementById('view-news-desc').innerText = news.desc;
+                openModal('modal-news-viewer');
+            }
+        };
+
+        // --- 9.4 ระบบจัดการคณะผู้จัดทำ (About Us Engine) ---
+        window.renderAboutCards = () => {
+            const members = JSON.parse(localStorage.getItem('breathsafe_about') || "[]");
+            const container = document.getElementById('about-cards-grid');
+            const loadingState = document.getElementById('about-loading-state');
+            const emptyState = document.getElementById('about-empty-state');
+            container.innerHTML = '';
+
+            // ซ่อน loading, แสดง empty ถ้าไม่มีสมาชิก
+            if (loadingState) loadingState.classList.add('hidden');
+            if (members.length === 0) {
+                if (emptyState) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.classList.add('flex');
+                }
+                return;
+            }
+            if (emptyState) {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+            
+            const lNickname = currentLang === 'th' ? translationDictionary.th["lbl-nickname"] : translationDictionary.en["lbl-nickname"];
+            const lAge = currentLang === 'th' ? translationDictionary.th["lbl-age"] : translationDictionary.en["lbl-age"];
+            const lYears = currentLang === 'th' ? translationDictionary.th["lbl-years"] : translationDictionary.en["lbl-years"];
+            const lGrade = currentLang === 'th' ? translationDictionary.th["lbl-grade"] : translationDictionary.en["lbl-grade"];
+            const lSchool = currentLang === 'th' ? translationDictionary.th["lbl-school"] : translationDictionary.en["lbl-school"];
+            const btnEdit = currentLang === 'th' ? translationDictionary.th["btn-edit"] : translationDictionary.en["btn-edit"];
+            const btnDel = currentLang === 'th' ? translationDictionary.th["btn-delete"] : translationDictionary.en["btn-delete"];
+
+            members.forEach(member => {
+                const adminControls = isUserAdmin ? `
+                    <div class="flex justify-between items-center px-4 py-3 bg-slate-50 border-t border-slate-100 rounded-b-2xl">
+                        <button onclick="editAboutRecord('${member.id}')" class="text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg transition"><i class="fas fa-edit mr-1"></i>${btnEdit}</button>
+                        <button onclick="deleteAboutRecord('${member.id}')" class="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg transition"><i class="fas fa-trash mr-1"></i>${btnDel}</button>
+                    </div>
+                ` : '';
+
+                container.innerHTML += `
+                    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative overflow-hidden">
+                        <div class="h-2 w-full bg-gradient-to-r from-blue-400 to-indigo-500 absolute top-0 left-0"></div>
+                        <div class="p-6 text-center pt-8">
+                            <div class="w-24 h-24 mx-auto rounded-full p-1 border border-slate-200 bg-white mb-4 shadow-sm relative group-hover:scale-105 transition duration-500">
+                                <img src="${member.image || 'https://via.placeholder.com/150'}" alt="${member.name}" class="w-full h-full rounded-full object-cover">
+                            </div>
+                            <h4 class="font-black text-slate-900 text-base mb-1 truncate">${member.name}</h4>
+                            <div class="text-[10px] font-bold text-blue-600 uppercase tracking-widest bg-blue-50 px-2.5 py-1 rounded-full inline-block mb-4 shadow-inner">${member.custom || "Team Member"}</div>
+                            
+                            <div class="space-y-2 text-left text-xs text-slate-600 font-medium border-t border-slate-50 pt-4">
+                                <div class="flex justify-between pb-1 border-b border-slate-50">
+                                    <span class="text-slate-400 font-bold">${lNickname}</span>
+                                    <span class="font-bold text-slate-700">${member.nickname || '-'}</span>
+                                </div>
+                                <div class="flex justify-between pb-1 border-b border-slate-50">
+                                    <span class="text-slate-400 font-bold">${lAge}</span>
+                                    <span class="font-bold text-slate-700">${member.age ? member.age + ' ' + lYears : '-'}</span>
+                                </div>
+                                <div class="flex justify-between pb-1 border-b border-slate-50">
+                                    <span class="text-slate-400 font-bold">${lGrade}</span>
+                                    <span class="font-bold text-slate-700">${member.grade || '-'}</span>
+                                </div>
+                                <div class="flex flex-col pt-1">
+                                    <span class="text-slate-400 font-bold mb-0.5">${lSchool}</span>
+                                    <span class="font-bold text-slate-700 truncate">${member.school || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-grow"></div>
+                        ${adminControls}
+                    </div>
+                `;
+            });
+        };
+
+        window.openAboutModal = () => {
+            document.getElementById('form-about-edit-id').value = ''; document.getElementById('form-about-name').value = ''; document.getElementById('form-about-nickname').value = ''; document.getElementById('form-about-age').value = ''; document.getElementById('form-about-grade').value = ''; document.getElementById('form-about-school').value = 'โรงเรียนเตรียมอุดมศึกษาภาคใต้'; document.getElementById('form-about-image').value = ''; document.getElementById('form-about-file').value = ''; document.getElementById('form-about-custom').value = '';
+            const previewImg = document.getElementById('about-preview-img');
+            const placeholder = document.getElementById('about-upload-placeholder');
+            previewImg.classList.add('hidden');
+            if (placeholder) placeholder.classList.remove('hidden');
+            delete previewImg.dataset.base64;
+            document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-plus text-blue-500 mr-2"></i>${currentLang === 'th' ? "เพิ่มข้อมูลคณะผู้จัดทำใหม่" : "Add New Member"}`; openModal('modal-admin-about');
+        };
+
+        window.processSaveAboutRecord = async () => {
+            const id = document.getElementById('form-about-edit-id').value;
+            const name = document.getElementById('form-about-name').value.trim();
+            const nickname = document.getElementById('form-about-nickname').value.trim();
+            const age = document.getElementById('form-about-age').value.trim();
+            const grade = document.getElementById('form-about-grade').value.trim();
+            const school = document.getElementById('form-about-school').value.trim();
+            const custom = document.getElementById('form-about-custom').value.trim();
+            const previewImg = document.getElementById('about-preview-img');
+            const newBase64 = previewImg.dataset.base64 || '';
+            const existingUrl = document.getElementById('form-about-image').value.trim();
+            const isBase64 = newBase64.startsWith('data:');
+
+            if (!name) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'ข้อมูลไม่ครบถ้วน' : 'Missing information', text: currentLang === 'th' ? 'กรุณาระบุชื่อ-นามสกุล' : 'Please provide a name.', confirmButtonColor: '#4f46e5' });
+
+            showDustLoading(); closeActiveModal('modal-admin-about');
+
+            try {
+                let imageUrl = existingUrl;
+                if (isBase64) {
+                    // รูปโปรไฟล์วงกลม — ใช้ path unique ต่อสมาชิก
+                    const uid = id || Date.now().toString();
+                    imageUrl = await uploadImageToStorage(newBase64, `about/member_${uid}.jpg`);
+                }
+
+                const memberData = { name, nickname, age, grade, school, image: imageUrl, custom, order: Date.now() };
+
+                if (window.fbDb && window.fbModules) {
+                    if (id) {
+                        await window.fbModules.updateDoc(
+                            window.fbModules.doc(window.fbDb, 'aboutMembers', id), memberData
+                        );
+                    } else {
+                        await window.fbModules.addDoc(
+                            window.fbModules.collection(window.fbDb, 'aboutMembers'), memberData
+                        );
+                    }
+                    // onSnapshot จะ trigger renderAboutCards() อัตโนมัติ
+                } else {
+                    let members = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
+                    if (id) { const i = members.findIndex(m => m.id === id); if (i > -1) members[i] = { id, ...memberData }; }
+                    else members.push({ id: Date.now().toString(), ...memberData });
+                    localStorage.setItem('breathsafe_about', JSON.stringify(members));
+                    renderAboutCards();
+                }
+
+                hideDustLoading();
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'บันทึกสำเร็จ! 🎉' : 'Saved! 🎉', text: currentLang === 'th' ? 'ข้อมูลคณะผู้จัดทำอัปเดตแล้ว — ผู้ใช้ทุกคนจะเห็นทันที' : 'Member updated — visible to all users now.', timer: 2000, showConfirmButton: false });
+            } catch (err) {
+                console.error('processSaveAboutRecord error:', err);
+                hideDustLoading();
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'บันทึกไม่สำเร็จ' : 'Save Failed', text: err.message, confirmButtonColor: '#ef4444' });
+            }
+        };
+
+        window.editAboutRecord = (id) => {
+            const members = JSON.parse(localStorage.getItem('breathsafe_about') || "[]");
+            const member = members.find(m => m.id === id);
+            if(member) {
+                document.getElementById('form-about-edit-id').value = member.id; document.getElementById('form-about-name').value = member.name; document.getElementById('form-about-nickname').value = member.nickname; document.getElementById('form-about-age').value = member.age; document.getElementById('form-about-grade').value = member.grade; document.getElementById('form-about-school').value = member.school; document.getElementById('form-about-image').value = member.image; document.getElementById('form-about-file').value = ''; document.getElementById('form-about-custom').value = member.custom;
+                const previewImg = document.getElementById('about-preview-img');
+                if (member.image) {
+                    previewImg.src = member.image;
+                    previewImg.dataset.base64 = member.image;
+                    previewImg.classList.remove('hidden');
+                    document.getElementById('about-upload-placeholder').classList.add('hidden');
+                } else {
+                    previewImg.classList.add('hidden');
+                    delete previewImg.dataset.base64;
+                    document.getElementById('about-upload-placeholder').classList.remove('hidden');
+                }
+                document.getElementById('about-modal-title').innerHTML = `<i class="fas fa-user-pen text-amber-500 mr-2"></i>${currentLang === 'th' ? "แก้ไขประวัติผู้จัดทำ" : "Edit Member Profile"}`; openModal('modal-admin-about');
+            }
+        };
+
+        window.deleteAboutRecord = async (id) => {
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: currentLang === 'th' ? 'ยืนยันการลบสมาชิก' : 'Confirm Delete',
+                text: currentLang === 'th' ? 'ต้องการลบสมาชิกคณะผู้จัดทำออกจากระบบหรือไม่? ไม่สามารถกู้คืนได้' : 'Remove this member permanently? This cannot be undone.',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: currentLang === 'th' ? '✕ ลบเลย' : 'Yes, remove',
+                cancelButtonText: currentLang === 'th' ? 'ยกเลิก' : 'Cancel'
+            });
+            if (!result.isConfirmed) return;
+
+            try {
+                if (window.fbDb && window.fbModules) {
+                    const members = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
+                    const target = members.find(m => m.id === id);
+                    if (target?.image) await deleteImageFromStorage(target.image);
+                    await window.fbModules.deleteDoc(window.fbModules.doc(window.fbDb, 'aboutMembers', id));
+                    // onSnapshot จะ trigger renderAboutCards() อัตโนมัติ
+                } else {
+                    let members = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
+                    localStorage.setItem('breathsafe_about', JSON.stringify(members.filter(m => m.id !== id)));
+                    renderAboutCards();
+                }
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'ลบสำเร็จ' : 'Removed', timer: 1200, showConfirmButton: false });
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Error', text: err.message, confirmButtonColor: '#ef4444' });
+            }
+        };
+
+        // -------------------------------------------------------------
+        // [10] ระบบยืนยันตัวตนและความปลอดภัย (Authentication Engine)
+        // -------------------------------------------------------------
+        window.switchAuthBoxMode = (mode) => {
+            ['box-user-authentication','box-register-authentication','box-admin-authentication','box-profile-authenticated']
+                .forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
+            const show = {
+                user:     'box-user-authentication',
+                register: 'box-register-authentication',
+                admin:    'box-admin-authentication',
+                profile:  'box-profile-authenticated'
+            }[mode];
+            if (show) document.getElementById(show)?.classList.remove('hidden');
+        };
+
+        // ===== Password strength + confirm match validator =====
+        window.validateRegisterForm = () => {
+            const email    = document.getElementById('input-reg-email')?.value.trim() || '';
+            const pw       = document.getElementById('input-reg-password')?.value || '';
+            const confirm  = document.getElementById('input-reg-confirm')?.value || '';
+            const btnReg   = document.getElementById('btn-register');
+            const bars     = [1,2,3,4].map(i => document.getElementById(`pw-bar-${i}`));
+            const label    = document.getElementById('pw-strength-label');
+            const matchOk  = document.getElementById('confirm-match-icon');
+            const matchNo  = document.getElementById('confirm-nomatch-icon');
+            const matchMsg = document.getElementById('confirm-match-msg');
+
+            // --- strength score ---
+            let score = 0;
+            if (pw.length >= 6)  score++;
+            if (pw.length >= 10) score++;
+            if (/[A-Z]/.test(pw) || /[0-9]/.test(pw)) score++;
+            if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+            const colors  = ['bg-rose-400','bg-amber-400','bg-yellow-400','bg-emerald-500'];
+            const labels  = ['อ่อนมาก','พอใช้','ดี','แข็งแกร่ง'];
+            const txtCols = ['text-rose-500','text-amber-500','text-yellow-600','text-emerald-600'];
+            bars.forEach((b, i) => {
+                b.className = `h-1 flex-1 rounded-full transition-all duration-300 ${i < score ? colors[score-1] : 'bg-slate-200'}`;
+            });
+            if (label) {
+                label.textContent = pw.length > 0 ? `ความแข็งแกร่ง: ${labels[score-1] || labels[0]}` : '';
+                label.className   = `text-[10px] font-bold ${score > 0 ? txtCols[score-1] : 'text-slate-400'}`;
+            }
+
+            // --- confirm match ---
+            const pwMatch = confirm.length > 0 && pw === confirm;
+            const pwNoMatch = confirm.length > 0 && pw !== confirm;
+            matchOk?.classList[pwMatch   ? 'remove' : 'add']('hidden');
+            matchNo?.classList[pwNoMatch ? 'remove' : 'add']('hidden');
+            if (matchMsg) {
+                if (pwMatch)   { matchMsg.textContent = '✓ รหัสผ่านตรงกัน'; matchMsg.className = 'text-[10px] font-bold text-emerald-600'; }
+                else if (pwNoMatch) { matchMsg.textContent = '✗ รหัสผ่านไม่ตรงกัน'; matchMsg.className = 'text-[10px] font-bold text-rose-500'; }
+                else { matchMsg.textContent = ''; }
+            }
+
+            // --- enable register button only when all valid ---
+            const canRegister = email.includes('@') && pw.length >= 6 && pw === confirm;
+            if (btnReg) { btnReg.disabled = !canRegister; }
+        };
+
+        // ===== Firebase Register =====
+        window.executeFirebaseRegister = async () => {
+            const email   = document.getElementById('input-reg-email')?.value.trim();
+            const pw      = document.getElementById('input-reg-password')?.value;
+            const confirm = document.getElementById('input-reg-confirm')?.value;
+
+            if (!email || !pw || pw !== confirm) return;
+
+            Swal.fire({ title: '🔐 กำลังสร้างบัญชี...', html: '<p class="text-sm text-slate-500">กำลังเชื่อมต่อ Firebase Auth</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                if (window.fbAuth && window.fbModules) {
+                    const cred = await window.fbModules.createUserWithEmailAndPassword(window.fbAuth, email, pw);
+
+                    // บันทึก user profile ลง Firestore "users" collection
+                    // เพื่อให้ member count (updateJoinMemberCount) นับได้จริง
+                    try {
+                        await window.fbModules.setDoc(
+                            window.fbModules.doc(window.fbDb, 'users', cred.user.uid),
+                            {
+                                email: cred.user.email,
+                                displayName: cred.user.displayName || null,
+                                joinedAt: Date.now(),
+                                provider: 'email'
+                            }
+                        );
+                    } catch (dbErr) {
+                        console.warn('บันทึก user profile ไม่สำเร็จ (ไม่กระทบการ login):', dbErr.message);
+                    }
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'สมัครสมาชิกสำเร็จ! 🎉',
+                        html: `<p class="text-sm text-slate-600">ยินดีต้อนรับสู่เครือข่าย BREATHSAFE<br><b class="text-blue-600">${email}</b></p>`,
+                        timer: 2500, showConfirmButton: false
+                    });
+                    setLoginState(false, cred.user);
+
+                    // รีเฟรช member count ทันที
+                    updateJoinMemberCount();
+                } else {
+                    Swal.fire({ icon: 'info', title: 'โหมดออฟไลน์', text: 'ยังไม่ได้ตั้งค่า Firebase กรุณาเปิดใช้งาน Firebase ก่อน', confirmButtonColor: '#3b82f6' });
+                }
+            } catch (err) {
+                let msg = err.message;
+                if (err.code === 'auth/email-already-in-use') msg = 'อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบแทน';
+                if (err.code === 'auth/invalid-email')        msg = 'รูปแบบอีเมลไม่ถูกต้อง';
+                if (err.code === 'auth/weak-password')        msg = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+                Swal.fire({ icon: 'error', title: 'สมัครไม่สำเร็จ', text: msg, confirmButtonColor: '#ef4444' });
+            }
+        };
+
+        window.toggleInputPasswordVisibility = (inputId) => {
+            const input = document.getElementById(inputId);
+            const icon = input.nextElementSibling.querySelector('i');
+            if(input.type === 'password') {
+                input.type = 'text'; icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password'; icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye');
+            }
+        };
+
+        // โลจิกสำหรับการเข้าสู่ระบบแบบ Hardcode เฉพาะแอดมินตามที่โจทย์กำหนด (Adminpmproject / Admin123)
+        window.executeSystemAdminLogin = () => {
+            const user = document.getElementById('input-admin-username').value;
+            const pass = document.getElementById('input-admin-password').value;
+            
+            if (user === "Adminpmproject" && pass === "Admin123") {
+                document.getElementById('input-admin-username').value = '';
+                document.getElementById('input-admin-password').value = '';
+                Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบแอดมินสำเร็จ!' : 'Admin Access Granted!', text: currentLang === 'th' ? 'ยินดีต้อนรับผู้ดูแลระบบ BREATHSAFE' : 'Welcome, BREATHSAFE Administrator', timer: 1800, showConfirmButton: false });
+                const mockAdminUser = { email: "admin@breathsafe.app", displayName: "System Administrator" };
+                setLoginState(true, mockAdminUser);
+            } else {
+                Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Access Denied', text: currentLang === 'th' ? 'รหัสแอดมินหรือรหัสผ่านไม่ถูกต้อง ปฏิเสธการเข้าถึง' : 'Invalid admin credentials. Access denied.', confirmButtonColor: '#ef4444' });
+            }
+        };
+
+        // โลจิกสำหรับ Firebase (ถูกออกแบบให้มี Alert Fallback กรณีที่ไม่ได้ต่อ Firebase ไว้)
+        window.executeFirebaseEmailAuth = async (action) => {
+            const email = document.getElementById('input-auth-email').value;
+            const password = document.getElementById('input-auth-password').value;
+            
+            if (!email || !password) return Swal.fire({ icon: 'warning', title: currentLang === 'th' ? 'กรุณากรอกข้อมูลให้ครบ' : 'Missing Info', text: currentLang === 'th' ? 'กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน' : 'Please enter both email and password.', confirmButtonColor: '#3b82f6' });
+
+            if (window.fbAuth) {
+                try {
+                    if (action === 'register') {
+                        const userCredential = await window.fbModules.createUserWithEmailAndPassword(window.fbAuth, email, password);
+                        Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'สมัครสมาชิกสำเร็จ!' : 'Account Created!', text: currentLang === 'th' ? 'สร้างบัญชีใหม่บนระบบ BREATHSAFE เรียบร้อยแล้ว' : 'Your BREATHSAFE account has been created.', timer: 1800, showConfirmButton: false });
+                        setLoginState(false, userCredential.user);
+                    } else {
+                        const userCredential = await window.fbModules.signInWithEmailAndPassword(window.fbAuth, email, password);
+                        const isAdmin = email === "admin@breathsafe.app";
+                        Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบสำเร็จ' : 'Signed In', text: currentLang === 'th' ? 'ยินดีต้อนรับเข้าสู่ระบบ BREATHSAFE' : 'Welcome back to BREATHSAFE!', timer: 1500, showConfirmButton: false });
+                        setLoginState(isAdmin, userCredential.user);
+                    }
+                } catch (error) {
+                    console.error("Auth Error:", error);
+                    Swal.fire({ icon: 'error', title: currentLang === 'th' ? 'เกิดข้อผิดพลาด' : 'Authentication Failed', text: error.message, confirmButtonColor: '#ef4444' });
+                }
+            } else {
+                Swal.fire({ icon: 'info', title: currentLang === 'th' ? 'โหมดออฟไลน์' : 'Offline Mode', text: currentLang === 'th' ? 'ยังไม่ได้ตั้งค่า Firebase กรุณาใช้ระบบแอดมินจำลองแทน' : 'Firebase not configured. Please use the admin panel.', confirmButtonColor: '#3b82f6' });
+            }
+        };
+
+        window.executeFirebaseGoogleAuth = async () => {
+            if (window.fbAuth && window.googleProvider) {
+                try {
+                    const result = await window.fbModules.signInWithPopup(window.fbAuth, window.googleProvider);
+                    const user = result.user;
+                    const isAdmin = user.email === "admin@breathsafe.app";
+
+                    // บันทึก/อัปเดต user profile ลง Firestore
+                    if (window.fbDb) {
+                        try {
+                            await window.fbModules.setDoc(
+                                window.fbModules.doc(window.fbDb, 'users', user.uid),
+                                { email: user.email, displayName: user.displayName, photoURL: user.photoURL, lastLoginAt: Date.now(), provider: 'google' },
+                                { merge: true }
+                            );
+                            updateJoinMemberCount();
+                        } catch (dbErr) { console.warn('user profile upsert:', dbErr.message); }
+                    }
+
+                    Swal.fire({ icon: 'success', title: currentLang === 'th' ? 'เข้าสู่ระบบสำเร็จ 🎉' : 'Signed In 🎉', html: `<p class="text-sm text-slate-600">${currentLang === 'th' ? 'ยินดีต้อนรับ' : 'Welcome'} <b class="text-blue-600">${user.displayName || user.email}</b></p>`, timer: 1800, showConfirmButton: false });
+                    setLoginState(isAdmin, user);
+                } catch (error) {
+                    console.error("Google Auth Error:", error);
+
+                    // แสดง error message ที่เข้าใจง่ายสำหรับ redirect_uri_mismatch
+                    let title = 'Google Sign-In Failed';
+                    let html = `<p class="text-sm text-slate-600">${error.message}</p>`;
+
+                    if (error.code === 'auth/unauthorized-domain' || error.message?.includes('redirect_uri_mismatch') || error.message?.includes('invalid_request')) {
+                        title = '⚙️ ต้องตั้งค่า Firebase ก่อน';
+                        html = `
+                            <div class="text-left text-xs text-slate-600 space-y-2 mt-2">
+                                <p class="font-bold text-rose-600">Domain ยังไม่ได้รับอนุญาตใน Firebase</p>
+                                <p>ให้แอดมินทำตามขั้นตอนนี้:</p>
+                                <ol class="list-decimal ml-4 space-y-1">
+                                    <li>ไปที่ Firebase Console → Authentication</li>
+                                    <li>แท็บ <b>Settings</b> → Authorized domains</li>
+                                    <li>กด <b>Add domain</b> → ใส่ <code class="bg-slate-100 px-1 rounded">husssr.github.io</code></li>
+                                    <li>Save แล้วลองใหม่</li>
+                                </ol>
+                            </div>`;
+                    } else if (error.code === 'auth/popup-closed-by-user') {
+                        return; // ผู้ใช้ปิด popup เอง ไม่ต้องแสดง error
+                    } else if (error.code === 'auth/popup-blocked') {
+                        title = '🚫 Popup ถูกบล็อก';
+                        html = '<p class="text-sm text-slate-600">กรุณาอนุญาต popup สำหรับเว็บนี้ แล้วลองใหม่</p>';
+                    }
+
+                    Swal.fire({ icon: 'error', title, html, confirmButtonColor: '#ef4444', width: 480 });
+                }
+            } else {
+                Swal.fire({ icon: 'info', title: currentLang === 'th' ? 'โหมดออฟไลน์' : 'Offline Mode', text: currentLang === 'th' ? 'ยังไม่ได้ตั้งค่า Firebase' : 'Firebase not configured.', confirmButtonColor: '#3b82f6' });
+            }
+        };
+
+        window.executeSignOutAction = async () => {
+            if (window.fbAuth && window.fbAuth.currentUser) {
+                try {
+                    await window.fbModules.signOut(window.fbAuth);
+                } catch (error) { console.error(error); }
+            }
+            setLoginState(false, null);
+            Swal.fire({ icon: 'info', title: currentLang === 'th' ? 'ออกจากระบบแล้ว' : 'Signed Out', text: currentLang === 'th' ? 'ออกจากระบบ BREATHSAFE เรียบร้อยแล้ว' : 'You have been signed out successfully.', timer: 1500, showConfirmButton: false });
+        };
+
+        // ฟังก์ชันควบคุม UI เมื่อสถานะ Login เปลี่ยนแปลง
+        function setLoginState(isAdmin, userObject) {
+            isUserAdmin = isAdmin;
+
+            if (userObject) {
+                // ซ่อนทุก box แล้วแสดง profile
+                switchAuthBoxMode('profile');
+                document.getElementById('authenticated-user-name').innerText =
+                    userObject.displayName || userObject.email || "Breathsafe User";
+
+                const adminBadge = document.getElementById('admin-badge');
+                const starBadge  = document.getElementById('badge-admin-profile-star');
+                [adminBadge, starBadge].forEach(el => el?.classList[isAdmin ? 'remove' : 'add']('hidden'));
+                if (adminBadge) adminBadge.classList[isAdmin ? 'add' : 'remove']('inline-flex');
+                if (starBadge)  starBadge.classList[isAdmin ? 'add' : 'remove']('flex');
+
+                ['btn-edit-hero','btn-add-news','btn-add-member-card'].forEach(id => {
+                    document.getElementById(id)?.classList[isAdmin ? 'remove' : 'add']('hidden');
+                });
+            } else {
+                switchAuthBoxMode('user');
+                // clear ฟอร์ม login
+                ['input-auth-email','input-auth-password','input-reg-email','input-reg-password','input-reg-confirm']
+                    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+                document.getElementById('admin-badge')?.classList.add('hidden');
+                ['btn-edit-hero','btn-add-news','btn-add-member-card'].forEach(id =>
+                    document.getElementById(id)?.classList.add('hidden'));
+            }
+
+            renderNewsCards();
+            renderAboutCards();
+        }
+
+        // -------------------------------------------------------------
+        // [11] ระบบจัดการป๊อปอัป (Modal Controllers)
+        // -------------------------------------------------------------
+        window.openModal = (modalId) => {
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // ล็อกหน้าจอไม่ให้สกอร์ลง
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeActiveModal = (modalId) => {
+            const modal = document.getElementById(modalId);
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = 'auto';
+        };
+
+        // -------------------------------------------------------------
+        // [12] ระบบเริ่มต้นการทำงานอัตโนมัติ (Bootstrapping / Initialization)
+        // -------------------------------------------------------------
+        window.onload = function() {
+            // โหลดข้อมูลเริ่มต้นและเรนเดอร์โครงสร้าง UI
+            seedInitialData();
+            renderHeroCover();
+            renderDashboardWidgets();
+            renderAirQualityTable();
+            renderNewsCards();
+            
+            // แสดง loading state บนหน้า about ถ้า Firebase กำลังโหลด
+            if (window.fbDb) {
+                // Firebase connected — แสดง loading state รอ onSnapshot
+                const loadingState = document.getElementById('about-loading-state');
+                const emptyState = document.getElementById('about-empty-state');
+                const container = document.getElementById('about-cards-grid');
+                if (loadingState) { loadingState.classList.remove('hidden'); loadingState.classList.add('flex'); }
+                if (emptyState) emptyState.classList.add('hidden');
+                if (container) container.innerHTML = '';
+            } else {
+                // ไม่มี Firebase — render จาก localStorage ทันที
+                renderAboutCards();
+            }
+            
+            initializeMaps();
+            
+            // อัปเดตภาษาเริ่มต้นให้เป็นภาษาไทย
+            changeLanguage('th');
+
+            // หน่วงเวลาหน้าจอโหลดเพื่อให้ระบบเตรียมกราฟิกและแผนที่เสร็จสิ้นสมบูรณ์
+            setTimeout(() => {
+                const loader = document.getElementById('global-loader');
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    // อัปเดตขนาดแผนที่หลังจากซ่อนหน้าจอโหลด เพื่อกันบั๊กกล่องแผนที่เทา
+                    if(homeMiniMapInstance) homeMiniMapInstance.invalidateSize();
+                }, 500);
+            }, 1800);
+        };
+        // 1. ปรับฟังก์ชันเปลี่ยนหน้าให้ไปเปลี่ยน URL Hash แทน
+window.switchView = function(view) {
+    window.location.hash = view; // สั่งให้ URL ด้านบนต่อท้ายด้วย #ชื่อหน้า
+};
+
+// 2. สร้างระบบดักจับ (Router) เมื่อ URL เปลี่ยน หรือผู้ใช้กดย้อนกลับ/ไปข้างหน้า
+window.addEventListener('hashchange', () => {
+    // ปิดเสียง AI และตัวการ์ตูนทันทีเมื่อเปลี่ยนไปหน้าอื่น
+    terminateSpeechAudio();
+
+    // อ่านค่าว่าตอนนี้อยู่หน้าอะไร
+    let hash = window.location.hash.replace('#', '');
+    if (!hash) hash = 'home'; // ถ้าไม่มีให้ค่าเริ่มต้นเป็นหน้า home
+
+    // ซ่อนทุกหน้าต่าง (ที่มีคลาส .view-section)
+    document.querySelectorAll('.view-section').forEach(el => {
+        el.classList.remove('active');
+    });
+
+    // โชว์เฉพาะหน้าต่างที่ตรงกับ URL ตอนนี้
+    const activeView = document.getElementById(`view-${hash}`);
+    if (activeView) {
+        activeView.classList.add('active');
+    }
+
+    // คืนค่าสีแถบเมนูด้านบน (เฉพาะปุ่มเนวบาร์หลักที่มี id nav-*)
+    document.querySelectorAll('[id^="nav-"]').forEach(btn => {
+        btn.classList.remove('text-blue-600', 'bg-blue-50/50', 'bg-slate-50');
+    });
+    const activeNav = document.getElementById(`nav-${hash}`);
+    if (activeNav) {
+        activeNav.classList.add('text-blue-600', 'bg-blue-50/50'); // ใส่แถบสีให้เมนูที่กำลังเปิดอยู่
+    }
+
+    // ป้องกันบั๊กกล่องแผนที่เทา (ถ้าหน้านั้นมีแผนที่ ให้สั่งวาดใหม่)
+    if (hash === 'map' && typeof mainMapInstance !== 'undefined' && mainMapInstance) {
+        setTimeout(() => mainMapInstance.invalidateSize(), 250);
+    }
+    if (hash === 'home' && typeof homeMiniMapInstance !== 'undefined' && homeMiniMapInstance) {
+        setTimeout(() => homeMiniMapInstance.invalidateSize(), 250);
+    }
+
+    // render หน้าข่าวทั้งหมดเมื่อเข้าหน้านั้น
+    if (hash === 'news-all' && typeof window.renderNewsAll === 'function') {
+        window.renderNewsAll();
+    }
+
+    // เมื่อเปลี่ยนหน้าแล้วให้เลื่อนสมูทกลับไปบนสุดเสมอ
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // แสดง/ซ่อน contact widget (แสดงทุกหน้ายกเว้น join/admin)
+    const contactWidget = document.getElementById('contact-widget');
+    const contactCard = document.getElementById('contact-card');
+    const contactIcon = document.getElementById('contact-fab-icon');
+    if (contactWidget) {
+        const hideOn = ['join'];
+        if (hideOn.includes(hash)) {
+            contactWidget.classList.add('hidden');
+            if (contactCard) contactCard.classList.add('hidden');
+            if (contactIcon) contactIcon.className = 'fas fa-headset text-xl';
+        } else {
+            contactWidget.classList.remove('hidden');
+        }
+    }
+});
+
+// 3. เมื่อเปิดเว็บครั้งแรก ให้ระบบทำงานอัตโนมัติตาม URL ปัจจุบัน
+// (fire hashchange ทันทีเพื่อ init หน้าและ nav highlight)
+(function initRouter() {
+    const e = new Event('hashchange');
+    window.dispatchEvent(e);
+})();
+
+
+    </script>
     <div id="modal-view-about" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 opacity-0 transition-opacity duration-300" style="transition: opacity 0.3s ease;">
         <div class="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl transform scale-95 transition-transform duration-300">
             <div class="h-32 bg-gradient-to-r from-blue-500 to-indigo-600 relative">
@@ -1111,5 +3133,536 @@
             </div>
         </div>
     </div>
+    <script>
+        // ฟังก์ชันจัดการ Cookie Banner — accepted=true (ยอมรับ) / false (ปฏิเสธ/ปิด)
+        function dismissCookieBanner(accepted) {
+            localStorage.setItem('breathsafe_cookie_accepted', accepted ? 'true' : 'false');
+
+            // ทำให้แถบเลื่อนลงไปด้านล่างอย่างนุ่มนวล
+            const banner = document.getElementById('cookie-banner');
+            banner.classList.add('translate-y-full');
+
+            // ซ่อน element หลังจากอนิเมชันเลื่อนลงทำงานจบ
+            setTimeout(() => {
+                banner.style.display = 'none';
+            }, 500);
+        }
+        // คงชื่อฟังก์ชันเดิมไว้เผื่อมีการอ้างอิงที่อื่น (alias)
+        function acceptCookies() { dismissCookieBanner(true); }
+
+        // ตรวจสอบสถานะเมื่อโหลดหน้าเว็บเสร็จสิ้น
+        window.addEventListener('DOMContentLoaded', () => {
+            // หากยังไม่เคยกดยอมรับคุกกี้ ให้แสดงแถบขึ้นมา
+            if (!localStorage.getItem('breathsafe_cookie_accepted')) {
+                setTimeout(() => {
+                    const banner = document.getElementById('cookie-banner');
+                    banner.classList.remove('translate-y-full');
+                }, 800); // ดีเลย์โชว์นิดหน่อยเพื่อให้หน้าเว็บโหลดดูเนียนตา
+            }
+        });
+    </script>
+    <script>
+    // ฟังก์ชันเปิด-ปิด เมนูมือถือ (Bottom Sheet พร้อมแอนิเมชัน)
+    function toggleMobileMenu() {
+        const menu = document.getElementById('mobile-menu-dropdown');
+        const backdrop = document.getElementById('mobile-menu-backdrop');
+        const isOpening = menu.classList.contains('hidden');
+
+        if (isOpening) {
+            // เปิดเมนู: แสดง backdrop และเลื่อนแผ่นเมนูขึ้นมา
+            backdrop.classList.remove('hidden');
+            menu.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                backdrop.classList.remove('opacity-0');
+                menu.classList.remove('translate-y-full');
+            });
+        } else {
+            // ปิดเมนู: เลื่อนแผ่นเมนูลงและจางหาย ก่อนซ่อนจริง
+            backdrop.classList.add('opacity-0');
+            menu.classList.add('translate-y-full');
+            document.body.style.overflow = '';
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+                menu.classList.add('hidden');
+            }, 300);
+        }
+    }
+    // -------------------------------------------------------------
+    // [ระบบดึงข้อมูล API ฝุ่น PM2.5 จริงจาก Open-Meteo ครบทั้ง 23 อำเภอ]
+    // เอกสาร: https://open-meteo.com/en/docs/air-quality-api
+    // -------------------------------------------------------------
+    async function fetchRealtimeAirQuality() {
+        try {
+            const lats = districtsData.map(d => d.lat).join(',');
+            const lngs = districtsData.map(d => d.lng).join(',');
+            const apiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lngs}&current=pm2_5&timezone=auto`;
+
+            // ตั้ง timeout กันกรณีเครือข่ายช้าหรือ API ไม่ตอบสนอง
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+            const response = await fetch(apiUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`API Network Error: ${response.status}`);
+            const apiData = await response.json();
+
+            // เมื่อขอหลายพิกัดพร้อมกัน Open-Meteo จะตอบกลับเป็น Array หนึ่งรายการต่อหนึ่งอำเภอ
+            const resultList = Array.isArray(apiData) ? apiData : [apiData];
+            let updatedCount = 0;
+
+            resultList.forEach((data, index) => {
+                if (data && data.current && typeof data.current.pm2_5 === 'number' && !isNaN(data.current.pm2_5)) {
+                    districtsData[index].pm25 = Math.max(0, Math.round(data.current.pm2_5));
+                    updatedCount++;
+                }
+            });
+
+            if (updatedCount === 0) throw new Error("API ตอบกลับมาแต่ไม่มีค่า PM2.5 ที่ใช้งานได้");
+
+            // 1. อัปเดต Dashboard, ตาราง และหน้ารายละเอียด (ถ้าเปิดอยู่)
+            renderDashboardWidgets();
+            renderAirQualityTable();
+            if (currentlySelectedDistrictIndex !== null) {
+                const targetDistrict = districtsData[currentlySelectedDistrictIndex];
+                const assess = evaluatePm25Tier(targetDistrict.pm25);
+                document.getElementById('detail-pm-display').innerText = targetDistrict.pm25;
+                document.getElementById('detail-status-pill').innerText = currentLang === 'th' ? assess.tierTh : assess.tierEn;
+                document.getElementById('detail-status-pill').style.backgroundColor = assess.hexColor;
+                document.getElementById('detail-accent-bar').style.backgroundColor = assess.hexColor;
+                document.getElementById('detail-gauge-frame').style.borderColor = assess.hexColor;
+                document.getElementById('detail-rec-text').innerText = currentLang === 'th' ? assess.adviceTh : assess.adviceEn;
+            }
+
+            // 2. อัปเดตหมุดบนแผนที่ทั้งสองตัว (หน้าแรก + หน้าแผนที่เต็ม)
+            renderAllMapMarkers();
+
+            // 3. อัปเดตสถานะแสดงเวลาล่าสุดที่ดึงข้อมูลสำเร็จ
+            const statusEl = document.getElementById('pm25-source-status');
+            if (statusEl) {
+                const now = new Date();
+                statusEl.innerHTML = `<i class="fas fa-circle text-emerald-500 text-[6px] mr-1.5 align-middle"></i>${currentLang === 'th' ? 'ข้อมูลจริงจาก Open-Meteo อัปเดตล่าสุด' : 'Live data from Open-Meteo, updated'} ${now.toLocaleTimeString(currentLang === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit' })}`;
+            }
+
+            console.log(`🟢 อัปเดตค่า PM2.5 จริงสำเร็จ ${updatedCount}/${districtsData.length} อำเภอ`);
+        } catch (error) {
+            console.warn("🔴 ไม่สามารถดึงข้อมูล PM2.5 จาก API ได้:", error);
+            const statusEl = document.getElementById('pm25-source-status');
+            if (statusEl) {
+                statusEl.innerHTML = `<i class="fas fa-circle text-amber-500 text-[6px] mr-1.5 align-middle"></i>${currentLang === 'th' ? 'ใช้ข้อมูลสำรอง (เชื่อมต่อ API ไม่สำเร็จ)' : 'Using fallback data (API unreachable)'}`;
+            }
+        }
+    }
+
+    // สั่งให้ระบบทำงานทันทีเมื่อโหลดหน้าเว็บเสร็จ
+    window.addEventListener('DOMContentLoaded', () => {
+        // หน่วงเวลาเล็กน้อยให้แผนที่/ตารางสร้างด้วยค่าเริ่มต้นก่อน (กันหน้าจอขาว) แล้วค่อยเอาของจริงมาทับ
+        setTimeout(() => {
+            fetchRealtimeAirQuality();
+        }, 1200);
+
+        // สั่งให้อัปเดตข้อมูลใหม่ทุกๆ 15 นาที
+        setInterval(fetchRealtimeAirQuality, 900000);
+    });
+
+    // -------------------------------------------------------------
+    // ระบบเชื่อม Weather API จริง จ.นครศรีธรรมราช (Open-Meteo Forecast API)
+    // เอกสาร: https://open-meteo.com/en/docs
+    // -------------------------------------------------------------
+    async function fetchRealWeather() {
+        const tempEl = document.getElementById('real-temp');
+        const humidEl = document.getElementById('real-humid');
+        const windEl = document.getElementById('real-wind');
+        const iconEl = document.getElementById('real-weather-icon');
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+            const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=8.4304&longitude=99.9631&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto', { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`Weather API Error: ${response.status}`);
+            const data = await response.json();
+            if (!data.current) throw new Error("ไม่มีข้อมูล current ในผลลัพธ์");
+
+            const temp = Math.round(data.current.temperature_2m);
+            const humid = Math.round(data.current.relative_humidity_2m);
+            const wind = Math.round(data.current.wind_speed_10m);
+            const code = data.current.weather_code;
+
+            if (tempEl) tempEl.innerText = temp + " °C";
+            if (humidEl) humidEl.innerText = humid + "%";
+            if (windEl) windEl.innerText = wind + " km/h";
+
+            // ปรับไอคอนตามรหัสสภาพอากาศ (WMO Weather Code)
+            if (iconEl) {
+                let iconClass = "fa-cloud-sun-rain"; // ค่าเริ่มต้น
+                if (code === 0) iconClass = "fa-sun";
+                else if (code <= 2) iconClass = "fa-cloud-sun";
+                else if (code === 3) iconClass = "fa-cloud";
+                else if (code <= 48) iconClass = "fa-smog";
+                else if (code <= 67) iconClass = "fa-cloud-rain";
+                else if (code <= 77) iconClass = "fa-snowflake";
+                else if (code <= 82) iconClass = "fa-cloud-showers-heavy";
+                else if (code <= 99) iconClass = "fa-cloud-bolt";
+                iconEl.className = `fas ${iconClass} absolute -right-2 -bottom-2 text-5xl text-slate-800 opacity-40`;
+            }
+        } catch (error) {
+            console.warn("🔴 ไม่สามารถดึงข้อมูลสภาพอากาศได้:", error);
+            if (tempEl && tempEl.innerText === '-- °C') tempEl.innerText = "N/A";
+            if (humidEl && humidEl.innerText === '--') humidEl.innerText = "N/A";
+            if (windEl && windEl.innerText === '--') windEl.innerText = "N/A";
+        }
+    }
+
+    // สั่งให้ระบบดึงข้อมูลสภาพอากาศทันทีเมื่อเปิดเว็บ
+    fetchRealWeather();
+    
+    // ตั้งเวลาให้อัปเดตสภาพอากาศอัตโนมัติทุกๆ 30 นาที (1800000 มิลลิวินาที)
+    setInterval(fetchRealWeather, 1800000);
+
+</script>
+
+
+<!-- ====== Image Crop Modal (ใช้ร่วมทุกช่อง) ====== -->
+<div id="crop-modal" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-[10000] justify-center items-center p-3 md:p-6">
+    <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col" style="max-height:92vh">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-4 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-crop-simple text-white"></i>
+                </div>
+                <div>
+                    <div class="text-white font-extrabold text-sm">ครอปรูปภาพ</div>
+                    <div id="crop-mode-label" class="text-slate-400 text-[10px] font-medium"></div>
+                </div>
+            </div>
+            <button onclick="closeCropModal()" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
+                <i class="fas fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Canvas Area -->
+        <div class="flex-1 overflow-auto bg-slate-100 flex items-center justify-center p-3" style="min-height:200px">
+            <div class="relative inline-block select-none" style="line-height:0">
+                <canvas id="crop-canvas" class="block rounded-xl shadow-lg" style="cursor:move; max-width:100%; touch-action:none;"></canvas>
+            </div>
+        </div>
+
+        <!-- Instructions + Buttons -->
+        <div class="px-5 py-4 border-t border-slate-100 bg-white shrink-0">
+            <div class="text-[10px] text-slate-400 font-medium mb-3 flex items-center gap-1.5">
+                <i class="fas fa-circle-info text-blue-400"></i>
+                ลากกล่องเพื่อเลื่อน · ลากมุมเพื่อปรับขนาด (อัตราส่วนล็อกอัตโนมัติ)
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeCropModal()" class="px-5 py-2.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200 transition">
+                    ยกเลิก
+                </button>
+                <button onclick="applyCrop()" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-300/40 transition flex items-center gap-2">
+                    <i class="fas fa-check"></i> ใช้รูปนี้
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== Contact Widget ลอยมุมขวาล่าง (ข้อ 9) ====== -->
+<div id="contact-widget" class="fixed bottom-5 right-4 z-[990] flex flex-col items-end gap-2 transition-all duration-300">
+    <!-- Card ข้อมูลติดต่อ (ย่อ/ขยายได้) -->
+    <div id="contact-card" class="hidden bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl shadow-slate-900/15 overflow-hidden w-64 transition-all duration-300 origin-bottom-right">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-wind text-white text-sm"></i>
+                </div>
+                <span class="text-white font-extrabold text-sm tracking-tight">ติดต่อ BREATHSAFE</span>
+            </div>
+            <button onclick="toggleContactCard()" class="text-white/80 hover:text-white transition w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/20">
+                <i class="fas fa-xmark text-xs"></i>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="p-4 space-y-3">
+            <p class="text-[11px] text-slate-500 font-medium leading-relaxed">โครงงาน BREATHSAFE พัฒนาโดยนักเรียนโรงเรียนเตรียมอุดมศึกษาภาคใต้ ติดต่อเราผ่านช่องทางด้านล่าง</p>
+            <!-- Facebook -->
+            <a href="https://www.facebook.com/triamudomsouth/?locale=th_TH" target="_blank" rel="noopener noreferrer"
+               class="flex items-center gap-3 p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-all group">
+                <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+                    <i class="fab fa-facebook-f text-white text-sm"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Facebook Page</div>
+                    <div class="text-xs font-bold text-blue-700 truncate max-w-[140px]">ทรม. ภาคใต้ (Official)</div>
+                </div>
+                <i class="fas fa-arrow-up-right-from-square text-blue-400 text-[10px] ml-auto shrink-0"></i>
+            </a>
+            <!-- Instagram -->
+            <a href="https://www.instagram.com/tus_breathsafe?igsh=MWp1dXlqeHhpMHgwZw==" target="_blank" rel="noopener noreferrer"
+               class="flex items-center gap-3 p-3 rounded-2xl bg-pink-50 hover:bg-pink-100 transition-all group">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform" style="background: linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)">
+                    <i class="fab fa-instagram text-white text-sm"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Instagram</div>
+                    <div class="text-xs font-bold text-pink-700">@tus_breathsafe</div>
+                </div>
+                <i class="fas fa-arrow-up-right-from-square text-pink-400 text-[10px] ml-auto shrink-0"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- ปุ่มลอย FAB -->
+    <button id="contact-fab" onclick="toggleContactCard()"
+        class="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl shadow-xl shadow-blue-500/40 flex items-center justify-center transition-all active:scale-95 hover:scale-105"
+        title="ติดต่อเรา">
+        <i id="contact-fab-icon" class="fas fa-headset text-xl"></i>
+    </button>
+</div>
+
+
+<!-- ====== Upload Loading — วงกลมกระโดดจากหลังมาหน้า ====== -->
+<style>
+    #dust-loading-overlay {
+        display: none;
+        position: fixed;
+        bottom: 36px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 99999;
+        background: rgba(255,255,255,0.82);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(99,102,241,0.13);
+        border-radius: 99px;
+        padding: 12px 24px;
+        box-shadow: 0 6px 28px rgba(99,102,241,0.15), 0 2px 8px rgba(0,0,0,0.07);
+        align-items: center;
+        gap: 8px;
+    }
+    html.dark #dust-loading-overlay {
+        background: rgba(15,23,42,0.86);
+        border-color: rgba(99,102,241,0.22);
+    }
+
+    /* วงกลมแต่ละลูก */
+    .pop-ball {
+        width: 11px; height: 11px;
+        border-radius: 50%;
+        display: inline-block;
+        animation: popDepth 1.1s cubic-bezier(0.36,0.07,0.19,0.97) infinite;
+        transform-origin: center bottom;
+    }
+    .pop-ball:nth-child(1){ background:#6366f1; box-shadow:0 0 6px #6366f160; animation-delay:0s;    }
+    .pop-ball:nth-child(2){ background:#3b82f6; box-shadow:0 0 6px #3b82f660; animation-delay:0.14s; }
+    .pop-ball:nth-child(3){ background:#a855f7; box-shadow:0 0 6px #a855f760; animation-delay:0.28s; }
+    .pop-ball:nth-child(4){ background:#06b6d4; box-shadow:0 0 6px #06b6d460; animation-delay:0.42s; }
+    .pop-ball:nth-child(5){ background:#f472b6; box-shadow:0 0 6px #f472b660; animation-delay:0.56s; }
+
+    /* กระโดดจากหลัง (เล็ก+โปร่ง) → หน้า (ใหญ่+ชัด) → ถอยกลับสมูท */
+    @keyframes popDepth {
+        0%   { transform: scale(0.45) translateY(0);   opacity: 0.25; }
+        30%  { transform: scale(1.25) translateY(-14px); opacity: 1;    }
+        55%  { transform: scale(1.0)  translateY(0);   opacity: 0.85; }
+        75%  { transform: scale(0.7)  translateY(0);   opacity: 0.45; }
+        100% { transform: scale(0.45) translateY(0);   opacity: 0.25; }
+    }
+</style>
+<div id="dust-loading-overlay" role="status" aria-label="กำลังอัปโหลด">
+    <span class="pop-ball"></span>
+    <span class="pop-ball"></span>
+    <span class="pop-ball"></span>
+    <span class="pop-ball"></span>
+    <span class="pop-ball"></span>
+</div>
+
+
+<script>
+    // API สำหรับเปิด/ปิด dust loading
+    window.showDustLoading = function() {
+        const el = document.getElementById('dust-loading-overlay');
+        el.style.display = 'flex';
+        el.style.opacity = '0';
+        requestAnimationFrame(() => {
+            el.style.transition = 'opacity 0.25s ease';
+            el.style.opacity = '1';
+        });
+        // ไม่ lock scroll — ให้ overlay ลอยด้านหน้าโดยไม่เปลี่ยนพื้นหลัง
+    };
+    window.hideDustLoading = function() {
+        const el = document.getElementById('dust-loading-overlay');
+        el.style.transition = 'opacity 0.3s ease';
+        el.style.opacity = '0';
+        setTimeout(() => { el.style.display = 'none'; el.style.transition = ''; }, 310);
+        document.body.style.overflow = '';
+    };
+
+    // ============================================================
+    // Dark / Light Mode Toggle
+    // ============================================================
+    window.toggleTheme = function() {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('breathsafe_theme', isDark ? 'dark' : 'light');
+        const icon = document.getElementById('theme-icon');
+        if (icon) {
+            icon.className = isDark
+                ? 'fas fa-moon text-indigo-300'
+                : 'fas fa-sun text-yellow-500';
+        }
+    };
+    // โหลด theme ที่บันทึกไว้
+    (function initTheme() {
+        const saved = localStorage.getItem('breathsafe_theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) {
+            document.documentElement.classList.add('dark');
+            const icon = document.getElementById('theme-icon');
+            if (icon) icon.className = 'fas fa-moon text-indigo-300';
+        }
+    })();
+
+    // ============================================================
+    // Member Count จาก Firestore จริง — นับทุกครั้งที่มีการ auth
+    // ============================================================
+    window.updateJoinMemberCount = async function() {
+        const el = document.getElementById('join-member-count');
+        if (!el) return;
+        try {
+            if (window.fbDb && window.fbModules) {
+                const snap = await window.fbModules.getDocs(
+                    window.fbModules.collection(window.fbDb, 'users')
+                );
+                el.textContent = snap.size.toLocaleString();
+            } else { el.textContent = '0'; }
+        } catch (_) { el.textContent = '0'; }
+    };
+    // เรียกทันทีเมื่อโหลด
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(window.updateJoinMemberCount, 2000);
+    });
+
+    // ============================================================
+    // หน้าข่าวทั้งหมด (view-news-all)
+    // ============================================================
+    window.renderNewsAll = function() {
+        const list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+        const grid = document.getElementById('news-all-grid');
+        const empty = document.getElementById('news-all-empty');
+        if (!grid) return;
+        const isAdmin = window.isUserAdmin || false;
+        if (list.length === 0) {
+            grid.innerHTML = '';
+            empty?.classList.remove('hidden');
+            empty?.classList.add('flex');
+            return;
+        }
+        empty?.classList.add('hidden');
+        empty?.classList.remove('flex');
+        grid.innerHTML = list.map(n => `
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200/80 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer" onclick="viewFullNews('${n.id}')">
+                ${n.image ? `<div class="h-44 overflow-hidden"><img src="${n.image}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" onerror="this.parentElement.style.display='none'"></div>` : ''}
+                <div class="p-4 space-y-2">
+                    <div class="text-[10px] font-black text-blue-500 uppercase tracking-widest">${n.date || ''}</div>
+                    <h3 class="font-black text-slate-900 text-sm leading-snug line-clamp-2">${n.title || ''}</h3>
+                    <p class="text-xs text-slate-500 leading-relaxed line-clamp-3">${n.desc || ''}</p>
+                    ${isAdmin ? `<div class="flex gap-2 pt-2 border-t border-slate-100">
+                        <button onclick="event.stopPropagation();openNewsModal('${n.id}')" class="text-[10px] font-bold text-blue-600 hover:underline"><i class="fas fa-pen mr-1"></i>แก้ไข</button>
+                        <button onclick="event.stopPropagation();deleteNewsRecord('${n.id}',event)" class="text-[10px] font-bold text-rose-500 hover:underline"><i class="fas fa-trash mr-1"></i>ลบ</button>
+                    </div>` : ''}
+                </div>
+            </div>`).join('');
+
+        // แสดงปุ่มเพิ่มข่าวถ้าเป็น admin
+        const addBtn = document.getElementById('btn-add-news-all');
+        if (addBtn) addBtn.classList[isAdmin ? 'remove' : 'add']('hidden');
+    };
+
+    window.filterNewsAll = function(q) {
+        const list = JSON.parse(localStorage.getItem('breathsafe_news') || '[]');
+        const filtered = q.trim()
+            ? list.filter(n => (n.title+n.desc).toLowerCase().includes(q.toLowerCase()))
+            : list;
+        const grid = document.getElementById('news-all-grid');
+        if (!grid) return;
+        grid.innerHTML = filtered.map(n => `
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200/80 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer" onclick="viewFullNews('${n.id}')">
+                ${n.image ? `<div class="h-44 overflow-hidden"><img src="${n.image}" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.style.display='none'"></div>` : ''}
+                <div class="p-4 space-y-2">
+                    <div class="text-[10px] font-black text-blue-500 uppercase tracking-widest">${n.date || ''}</div>
+                    <h3 class="font-black text-slate-900 text-sm leading-snug line-clamp-2">${n.title || ''}</h3>
+                    <p class="text-xs text-slate-500 leading-relaxed line-clamp-3">${n.desc || ''}</p>
+                </div>
+            </div>`).join('');
+    };
+
+    // ============================================================
+    // PM10 / O3 / CO จาก Open-Meteo Air Quality API (จริง)
+    // ============================================================
+    async function fetchExtraAirQuality() {
+        try {
+            // ใช้พิกัดใจกลาง นครศรีธรรมราช
+            const res = await fetch(
+                'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=8.4304&longitude=99.9631&current=pm10,ozone,carbon_monoxide&timezone=auto',
+                { signal: AbortSignal.timeout(12000) }
+            );
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            const cur = data.current;
+            if (!cur) return;
+
+            // PM10
+            const pm10El  = document.getElementById('real-pm10');
+            const pm10Dot = document.getElementById('real-pm10-dot');
+            if (pm10El && typeof cur.pm10 === 'number') {
+                pm10El.textContent = Math.round(cur.pm10) + ' mcg/m³';
+                const color = cur.pm10 <= 50 ? '#10b981' : cur.pm10 <= 100 ? '#f59e0b' : '#ef4444';
+                if (pm10Dot) pm10Dot.style.backgroundColor = color;
+            }
+
+            // O3 (Ozone) — μg/m³
+            const o3El  = document.getElementById('real-o3');
+            const o3Dot = document.getElementById('real-o3-dot');
+            if (o3El && typeof cur.ozone === 'number') {
+                o3El.textContent = Math.round(cur.ozone) + ' μg/m³';
+                const color = cur.ozone <= 100 ? '#10b981' : cur.ozone <= 160 ? '#f59e0b' : '#ef4444';
+                if (o3Dot) o3Dot.style.backgroundColor = color;
+            }
+
+            // CO (Carbon Monoxide) — μg/m³
+            const coEl  = document.getElementById('real-co');
+            const coDot = document.getElementById('real-co-dot');
+            if (coEl && typeof cur.carbon_monoxide === 'number') {
+                coEl.textContent = Math.round(cur.carbon_monoxide) + ' μg/m³';
+                const color = cur.carbon_monoxide <= 4000 ? '#10b981' : cur.carbon_monoxide <= 9000 ? '#f59e0b' : '#ef4444';
+                if (coDot) coDot.style.backgroundColor = color;
+            }
+        } catch (e) {
+            console.warn('fetchExtraAirQuality:', e.message);
+        }
+    }
+    fetchExtraAirQuality();
+    setInterval(fetchExtraAirQuality, 900000); // อัปเดตทุก 15 นาที
+
+    // ============================================================
+    // Contact Widget fix — ให้ toggle ได้ทุก view
+    // ============================================================
+    window.toggleContactCard = function() {
+        const card = document.getElementById('contact-card');
+        const icon = document.getElementById('contact-fab-icon');
+        if (!card) return;
+        const isOpen = !card.classList.contains('hidden');
+        if (isOpen) {
+            card.classList.add('hidden');
+            if (icon) icon.className = 'fas fa-headset text-xl';
+        } else {
+            card.classList.remove('hidden');
+            if (icon) icon.className = 'fas fa-xmark text-xl';
+        }
+    };
+</script>
 </body>
 </html>
