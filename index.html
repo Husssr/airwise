@@ -1872,10 +1872,9 @@ const districtIssuesData = {
             if (!localStorage.getItem('breathsafe_news')) {
                 localStorage.setItem('breathsafe_news', JSON.stringify([]));
             }
-            // ไม่ seed ข้อมูลสมมุติ — แสดงจาก Firestore จริง หรือว่างเปล่าถ้า admin ยังไม่เพิ่ม
-            if (!localStorage.getItem('breathsafe_about')) {
-                localStorage.setItem('breathsafe_about', JSON.stringify([]));
-            }
+            // ไม่ seed ข้อมูลสมมุติ — ล้าง localStorage เสมอให้ Firestore เป็นแหล่งข้อมูลจริง
+            // (ข้อมูลจะถูก sync จาก Firestore onSnapshot อัตโนมัติ)
+            localStorage.removeItem('breathsafe_about');
         }
 
         // --- 9.2 ระบบจัดการภาพหน้าปก (Hero Section) ---
@@ -1914,23 +1913,20 @@ const districtIssuesData = {
             return new Blob([arr], { type: mime });
         }
 
-        // อัปโหลดรูปไป Cloudinary (unsigned upload — ไม่ต้องมี secret key ฝั่ง client)
+        // อัปโหลดรูปไป Cloudinary (unsigned upload)
+        // *** unsigned preset ส่งได้แค่ file + upload_preset เท่านั้น ***
+        // *** ห้ามส่ง public_id หรือ folder จะได้ error 403 ***
         async function uploadImageToStorage(base64DataUrl, storagePath) {
-            const folder = storagePath.includes('/') ? storagePath.split('/')[0] : 'breathsafe';
-            const publicId = 'breathsafe_' + storagePath.replace(/\//g, '_').replace(/\.[^.]+$/, '') + '_' + Date.now();
-
             // 1. Compress ก่อน
             const compressed = await compressBase64Image(base64DataUrl);
             const estimatedKB = Math.round(compressed.length * 0.75 / 1024);
-            console.log(`📤 Cloudinary upload: ${publicId} (~${estimatedKB} KB)`);
+            console.log(`📤 Cloudinary upload (~${estimatedKB} KB)`);
 
-            // 2. แปลงเป็น Blob แล้วส่งผ่าน FormData
+            // 2. ส่งแค่ file + upload_preset (unsigned ต้องการแค่นี้)
             const blob = dataUrlToBlob(compressed);
             const formData = new FormData();
             formData.append('file', blob, 'image.jpg');
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-            formData.append('folder', folder);
-            formData.append('public_id', publicId);
 
             // 3. Retry สูงสุด 3 ครั้ง
             let lastError;
@@ -1948,31 +1944,23 @@ const districtIssuesData = {
                     const text = await res.text();
                     let json;
                     try { json = JSON.parse(text); }
-                    catch (_) { throw new Error(`Cloudinary non-JSON (${res.status}): ${text.slice(0, 200)}`); }
+                    catch (_) { throw new Error(`Cloudinary response error (${res.status}): ${text.slice(0, 200)}`); }
 
                     if (!res.ok || json.error) {
-                        throw new Error(`Cloudinary: ${json?.error?.message || `HTTP ${res.status}`}`);
+                        throw new Error(json?.error?.message || `HTTP ${res.status}`);
                     }
 
                     const url = json.secure_url || json.url;
-                    console.log(`✅ Cloudinary OK (attempt ${attempt}): ${url}`);
+                    console.log(`✅ Cloudinary OK: ${url}`);
                     return url;
 
                 } catch (err) {
                     lastError = err;
                     console.warn(`⚠️ Cloudinary attempt ${attempt}/3:`, err.message);
-                    if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
                 }
             }
-            // แสดง error ที่เข้าใจง่าย
-            const msg = lastError?.message || 'unknown';
-            if (msg.includes('preset') || msg.includes('upload_preset') || msg.includes('Unknown API')) {
-                throw new Error('ยังไม่ได้ตั้งค่า Upload Preset ใน Cloudinary\n\nวิธีแก้: ไปที่ cloudinary.com → Settings → Upload → Add upload preset\nตั้งค่า Signing mode เป็น "Unsigned" แล้วใส่ชื่อ breathsafe_upload');
-            }
-            if (msg.includes('cloud_name') || msg.includes('Invalid cloud')) {
-                throw new Error('Cloud Name ไม่ถูกต้อง\n\nวิธีแก้: ตรวจสอบ CLOUDINARY_CLOUD_NAME ในโค้ดให้ตรงกับ cloud name ของคุณใน cloudinary.com');
-            }
-            throw new Error(`อัปโหลดไม่สำเร็จ (3 ครั้ง): ${msg}`);
+            throw new Error(`อัปโหลดไม่สำเร็จ: ${lastError?.message}`);
         }
 
         // Cloudinary ไม่รองรับ delete จาก client side โดยตรง (ต้องใช้ signed request)
@@ -2553,7 +2541,13 @@ const districtIssuesData = {
             const container = document.getElementById('about-cards-grid');
             container.innerHTML = '';
             if (members.length === 0) {
-                container.innerHTML = '<div class="col-span-full flex flex-col items-center justify-center py-24 text-center"><div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4"><i class="fas fa-users"></i></div><p class="text-slate-400 font-bold text-sm">ยังไม่มีข้อมูลคณะผู้จัดทำในระบบ</p></div>';
+                // ถ้า Firestore กำลังโหลด ให้แสดง spinner ก่อน ถ้าไม่มีจริงค่อยแสดง empty state
+                const isFirestoreConnected = window.fbDb && window.fbModules;
+                if (isFirestoreConnected) {
+                    container.innerHTML = '<div class="col-span-full flex flex-col items-center justify-center py-24 text-center"><div class="w-16 h-16 flex items-center justify-center mb-4"><div style="border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;width:40px;height:40px;animation:spin-anim 0.8s linear infinite"></div></div><p class="text-slate-400 font-medium text-sm">กำลังโหลดข้อมูล...</p></div>';
+                } else {
+                    container.innerHTML = '<div class="col-span-full flex flex-col items-center justify-center py-24 text-center"><div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center text-slate-300 text-4xl mb-4"><i class="fas fa-users"></i></div><p class="text-slate-400 font-bold text-sm">ยังไม่มีข้อมูลคณะผู้จัดทำในระบบ</p></div>';
+                }
                 return;
             }
             
@@ -3012,18 +3006,8 @@ const districtIssuesData = {
         // -------------------------------------------------------------
         window.onload = function() {
             // โหลดข้อมูลเริ่มต้นและเรนเดอร์โครงสร้าง UI
-            // ล้างข้อมูลสมมุติเก่าถ้ายังมีค้างอยู่ใน localStorage
-            (function clearFakeAboutData() {
-                const stored = JSON.parse(localStorage.getItem('breathsafe_about') || '[]');
-                const hasFakeData = stored.some(m => m.name && (
-                    m.name.includes('สมชาย') ||
-                    m.name.includes('สมหญิง') ||
-                    (m.image && m.image.includes('unsplash.com/photo-1535713875002'))
-                ));
-                if (hasFakeData) {
-                    localStorage.removeItem('breathsafe_about');
-                }
-            })();
+            // localStorage ถูกล้างทุกครั้งใน seedInitialData แล้ว
+            // ข้อมูลผู้จัดทำดึงจาก Firestore realtime เท่านั้น
             seedInitialData();
             renderHeroCover();
             renderDashboardWidgets();
